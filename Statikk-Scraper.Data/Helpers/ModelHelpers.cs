@@ -1,6 +1,7 @@
 using Camille.Enums;
 using Camille.RiotGames.MatchV5;
 using Sta.Data.Models;
+using Statikk_Scraper.Data.Models;
 using Statikk_Scraper.Models;
 using Team = Camille.RiotGames.Enums.Team;
 using static Statikk_Scraper.Helpers.EnumExtensions;
@@ -14,19 +15,16 @@ public static  class ModelHelpers
         var matchInfo = matchData.Info;
         var versionParts = matchInfo.GameVersion.Split('.');
         var patchVersion = $"{versionParts[0]}.{versionParts[1]}";
-
-        // Cache teams and determine winning team
+        
         var teamsArr = matchInfo.Teams.ToArray();
         var winningTeam = teamsArr.FirstOrDefault(t => t.Win)?.TeamId ?? Team.Other;
-
-        // Process teams regardless of queue type
+        
         var teams = new MatchTeams[teamsArr.Length];
         for (var i = 0; i < teamsArr.Length; i++)
         {
             var t = teamsArr[i];
             var objectives = t.Objectives;
-
-            // Process up to 5 ban champion IDs
+            
             var banChampionIds = new int[5];
             {
                 var j = 0;
@@ -57,8 +55,7 @@ public static  class ModelHelpers
                 TowerKills      = (byte)objectives.Tower.Kills
             };
         }
-
-        // Process participants
+        
         var participantsArr = matchInfo.Participants.ToArray();
         var participants = new Participants[participantsArr.Length];
         for (var i = 0; i < participantsArr.Length; i++)
@@ -76,7 +73,8 @@ public static  class ModelHelpers
                 RiotId        = NormalizeRiotId($"{p.RiotIdGameName}#{p.RiotIdTagline}"),
                 ProfileIconId = (short)p.ProfileIcon,
                 SummonerLevel = (short)p.SummonerLevel,
-                LastUpdated   = DateTime.UtcNow
+                LastUpdated   = DateTime.UtcNow,
+                Ranks = new List<SummonerRanks>()
             };
 
             participants[i] = new Participants
@@ -84,30 +82,19 @@ public static  class ModelHelpers
                 Team         = p.TeamId,
                 ChampionsId  = (short)p.ChampionId,
                 Role         = ConvertRole(p.TeamPosition),
-
-                PrimaryPageId           = (short)(primaryStyle?.Style ?? 0),
+                
                 PrimaryPageKeystoneId   = (short)(primaryStyle?.Selections?[0].Perk ?? 0),
-                PrimaryPageRow1Id       = (short)(primaryStyle?.Selections?[1].Perk ?? 0),
-                PrimaryPageRow2Id       = (short)(primaryStyle?.Selections?[2].Perk ?? 0),
-                PrimaryPageRow3Id       = (short)(primaryStyle?.Selections?[3].Perk ?? 0),
-
                 SecondaryPageId         = (short)(secondaryStyle?.Style ?? 0),
-                SecondaryPageOption1Id  = (short)(secondaryStyle?.Selections?[0].Perk ?? 0),
-                SecondaryPageOption2Id  = (short)(secondaryStyle?.Selections?[1].Perk ?? 0),
-
-                OffensiveStatId = (short)perks.StatPerks.Offense,
-                DefensiveStatId = (short)perks.StatPerks.Defense,
-                FlexStatId      = (short)perks.StatPerks.Flex,
-
+                
                 SummonerSpell1Id = (short)p.Summoner1Id,
                 SummonerSpell2Id = (short)p.Summoner2Id,
 
-                Kills  = (short)p.Kills,
-                Deaths = (short)p.Deaths,
-                Assists= (short)p.Assists,
+                Kills  = (byte)p.Kills,
+                Deaths = (byte)p.Deaths,
+                Assists= (byte)p.Assists,
                 Kda    = (decimal)(p.Challenges?.Kda ?? 0.0),
 
-                KillParticipation = (decimal)((p.Challenges?.KillParticipation ?? 0.0) * 100),
+                KillParticipation = (byte)((p.Challenges?.KillParticipation ?? 0.0) * 100),
                 CreepScore        = (short)p.TotalMinionsKilled,
 
                 Item1Id = (short)p.Item0,
@@ -117,24 +104,16 @@ public static  class ModelHelpers
                 Item5Id = (short)p.Item4,
                 Item6Id = (short)p.Item5,
                 Item7Id = (short)p.Item6,
-
-                GoldPerMinute    = (decimal)(p.Challenges?.GoldPerMinute ?? 0.0),
-                FirstBlood       = p.FirstBloodKill,
-                DoubleKills      = (byte)p.DoubleKills,
-                TripleKills      = (byte)p.TripleKills,
-                QuadraKills      = (byte)p.QuadraKills,
-                PentaKills       = (byte)p.PentaKills,
-
-                DamagePerMinute  = (decimal)(p.Challenges?.DamagePerMinute ?? 0),
-                TrueDamageDealt  = p.TrueDamageDealtToChampions,
-                AttackDamageDealt= p.PhysicalDamageDealtToChampions,
-                MagicDamageDealt = p.MagicDamageDealtToChampions,
+                
+                LargestMultiKill = (byte)p.LargestMultiKill,
+                
+                DamageDealt = p.TotalDamageDealtToChampions,
+                DamageTaken = p.TotalDamageTaken,
 
                 Summoner = summoner
             };
         }
-
-        // Construct and return the Matches object
+        
         return new Matches
         {
             GameId       = matchInfo.GameId,

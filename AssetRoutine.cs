@@ -1,107 +1,108 @@
 ﻿using System.Text.Json;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
-using Statikk_Scraper.Models;
+using Microsoft.Extensions.Logging;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.Processing;
 using Statikk_Scraper.Data;
+using Statikk_Scraper.Models;
 
 namespace Statikk_Scraper;
 
-public static class AssetRoutine
+public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory, ILogger<AssetRoutine> logger)
 {
-    private static readonly HttpClient HttpClient = new();
-    private static string _wwwrootPath = string.Empty;
-    private static string _connectionString = string.Empty;
-    
+    private readonly HttpClient _httpClient = httpClientFactory.CreateClient();
+    private string _wwwrootPath = string.Empty;
+
     private const string PatchVersionsUrl = "https://cdn.merakianalytics.com/riot/lol/resources/patches.json";
     private const string ChampionJsonUrl = "https://cdn.merakianalytics.com/riot/lol/resources/latest/en-US/champions.json";
     private const string QueueJsonUrl = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/queues.json";
     private const string ProfileIconJsonUrl = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons.json";
-    private const string SummonerSpellJsonUrl = "https://ddragon.leagueoflegends.com/cdn/{0}/data/en_US/summoner.json";
-    private const string SummonerSpellAssetUrl = "https://ddragon.leagueoflegends.com/cdn/{0}/img/spell/{1}";
+    private const string SummonerSpellJsonUrl = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/summoner-spells.json";
+    private const string SummonerSpellAssetUrl = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/data/spells/icons2d/";
     private const string RuneJsonUrl = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perks.json";
     private const string RunePageJsonUrl = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perkstyles.json";
     private const string ItemJsonUrl = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/items.json";
     private const string ItemAssetUrl = "https://raw.communitydragon.org/latest/game/assets/items/icons2d/";
 
-    private static IEnumerable<PatchVersions> PatchVersions { get; set; } = [];
-    
-    private static MosgiContext CreateSeioriContext() => new(new DbContextOptionsBuilder<MosgiContext>().UseSqlServer(_connectionString).Options);
-
-    public static async Task BeginAssetRoutine()
+    public async Task BeginAssetRoutine(string rootPath)
     {
-        _wwwrootPath = Environment.GetEnvironmentVariable("WWWROOT_PATH") ?? throw new Exception("WWWROOT_PATH is not set");
-        _connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING") ?? throw new Exception("CONNECTION_STRING is not set");
-        
-        var imagesDirectory = Path.Combine(_wwwrootPath, "images");
-        
-        if (!Directory.Exists(imagesDirectory))
-        {
-            Directory.CreateDirectory(imagesDirectory);
-        }
-        
-        var championsDirectory = Path.Combine(_wwwrootPath, "images", "Champions");
-        
-        if (!Directory.Exists(championsDirectory))
-        {
-            Directory.CreateDirectory(championsDirectory);
-        }
-        
-        await UpdatePatchVersionsAsync();
+        _wwwrootPath = rootPath;
 
-        await Task.WhenAll(
-            UpdateChampionsAsync(),
-            UpdateQueuesAsync(),
-            UpdateProfileIconsAsync(),
-            UpdateSummonerSpellsAsync(),
-            UpdateRunesAsync(),
-            UpdateItemsAsync()
-        );
+        try
+        {
+            await UpdatePatchVersionsAsync();
+            await UpdateChampionsAsync();
+            await UpdateQueuesAsync();
+            await UpdateProfileIconsAsync();
+            await UpdateSummonerSpellsAsync();
+            await UpdateRunesAsync();
+            await UpdateItemsAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogWarning("Asset routine was cancelled.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "An error occurred during the asset update routine.");
+            throw;
+        }
     }
-
-    private static async Task UpdatePatchVersionsAsync()
+    
+    private async Task<JsonDocument> GetJsonDocumentAsync(string url)
+    {
+        await using var stream = await _httpClient.GetStreamAsync(url);
+        return await JsonDocument.ParseAsync(stream);
+    }
+    
+    private static void EnsureDirectory(string path)
+    {
+        if (!Directory.Exists(path))
+            Directory.CreateDirectory(path);
+    }
+    
+    private async Task DownloadAndSaveImageAsync(string imageUrl, string filePath, string contextInfo)
     {
         try
         {
-            await using var context = CreateSeioriContext();
-            await using var stream = await HttpClient.GetStreamAsync(PatchVersionsUrl);
-            using var doc = await JsonDocument.ParseAsync(stream);
-
-            PatchVersions = doc.RootElement.GetProperty("patches").EnumerateArray()
-                .Select(p => new PatchVersions
-                {
-                    PatchVersion = p.GetProperty("name").GetString() ?? string.Empty,
-                    StartTimeStamp = p.GetProperty("start").GetInt64(),
-                    IsLatest = false
-                })
-                .OrderByDescending(p => p.StartTimeStamp)
-                .ToArray();
-        
-            if (!PatchVersions.Any()) throw new Exception("Patch Versions List is Empty");
-            
-            PatchVersions.FirstOrDefault()!.IsLatest = true;
-            PatchVersions = PatchVersions
-                .Take(PatchVersions.Count() - 3)
-                .ToArray();
-
-            await context.BulkInsertOrUpdateOrDeleteAsync(PatchVersions, options =>
-            {
-                options.PreserveInsertOrder = true;
-                options.SetOutputIdentity = true;
-            });
+            var imageBytes = await _httpClient.GetByteArrayAsync(imageUrl);
+            var webpBytes = ConvertImageToWebP(imageBytes);
+            await File.WriteAllBytesAsync(filePath, webpBytes);
         }
-        catch (Exception e)
+        catch (Exception ex)
         {
-            throw new Exception("Failed to Update Patch Versions", e);
+            logger.LogWarning(ex, $"Failed to process {contextInfo}");
         }
     }
-    
-    private static async Task UpdateChampionsAsync()
+
+    private async Task UpdatePatchVersionsAsync()
     {
-        var championsList = new List<Champions>();
-        var iconDirectories = new Dictionary<string, string>
+        using var doc = await GetJsonDocumentAsync(PatchVersionsUrl);
+        var patches = doc.RootElement.GetProperty("patches")
+            .EnumerateArray()
+            .Select(p => new Patches
+            {
+                PatchVersion = p.GetProperty("name").GetString() ?? string.Empty,
+                IsLatest = false
+            })
+            .Where(p => p.PatchVersion.Length <= 5)
+            .DistinctBy(p => p.PatchVersion)
+            .Reverse()
+            .ToArray();
+
+        if (patches.Length == 0)
+            throw new Exception("Patch Versions List is Empty");
+
+        patches[0].IsLatest = true;
+        await context.BulkInsertOrUpdateAsync(patches, options =>
+            options.UpdateByProperties = [nameof(Patches.PatchVersion)]);
+    }
+
+    private async Task UpdateChampionsAsync()
+    {
+        var iconDirs = new Dictionary<string, string>
         {
             { "Icon", Path.Combine(_wwwrootPath, "images", "Champions", "Icon") },
             { "Q", Path.Combine(_wwwrootPath, "images", "Champions", "Q") },
@@ -109,377 +110,160 @@ public static class AssetRoutine
             { "E", Path.Combine(_wwwrootPath, "images", "Champions", "E") },
             { "R", Path.Combine(_wwwrootPath, "images", "Champions", "R") }
         };
+        foreach (var dir in iconDirs.Values) EnsureDirectory(dir);
 
-        try
+        using var doc = await GetJsonDocumentAsync(ChampionJsonUrl);
+        var championJson = doc.RootElement.EnumerateObject();
+        var patchMapping = await context.Patches.ToDictionaryAsync(pv => pv.PatchVersion, pv => pv.Id);
+        var imageTasks = new List<Task>();
+        var championsList = new List<Champions>();
+
+        foreach (var champion in championJson)
         {
-            await using var context = CreateSeioriContext();
-            
-            // Ensure directories exist
-            foreach (var directory in iconDirectories.Values.Where(directory => !Directory.Exists(directory)))
+            var champValue = champion.Value;
+            var champId = champValue.GetProperty("id").GetInt16();
+            var champName = champValue.GetProperty("name").GetString() ?? string.Empty;
+
+            var abilities = champValue.GetProperty("abilities");
+            var images = new Dictionary<string, string>
             {
-                Directory.CreateDirectory(directory);
-            }
-            
-            await using var stream = await HttpClient.GetStreamAsync(ChampionJsonUrl);
-            using var doc = await JsonDocument.ParseAsync(stream);
+                { "Icon", champValue.GetProperty("icon").GetString() ?? string.Empty },
+                { "Q", abilities.GetProperty("Q")[0].GetProperty("icon").GetString() ?? string.Empty },
+                { "W", abilities.GetProperty("W")[0].GetProperty("icon").GetString() ?? string.Empty },
+                { "E", abilities.GetProperty("E")[0].GetProperty("icon").GetString() ?? string.Empty },
+                { "R", abilities.GetProperty("R")[0].GetProperty("icon").GetString() ?? string.Empty }
+            };
 
-            var championJsonList = doc.RootElement.EnumerateObject();
-
-            while (championJsonList.MoveNext())
+            foreach (var (key, url) in images)
             {
-                var champion = championJsonList.Current;
-                var championId = champion.Value.GetProperty("id").GetInt16();
-                var championName = champion.Value.GetProperty("name").GetString() ?? string.Empty;
-                var patchLastUpdated = champion.Value.GetProperty("patchLastChanged").GetString() ?? string.Empty;
-
-                var abilities = champion.Value.GetProperty("abilities");
-                var imageUrls = new Dictionary<string, string>
-                {
-                    { "Icon", champion.Value.GetProperty("icon").GetString() ?? string.Empty },
-                    { "Q", abilities.GetProperty("Q")[0].GetProperty("icon").GetString() ?? string.Empty },
-                    { "W", abilities.GetProperty("W")[0].GetProperty("icon").GetString() ?? string.Empty },
-                    { "E", abilities.GetProperty("E")[0].GetProperty("icon").GetString() ?? string.Empty },
-                    { "R", abilities.GetProperty("R")[0].GetProperty("icon").GetString() ?? string.Empty }
-                };
-
-                // Process and save images
-                foreach (var key in imageUrls.Keys)
-                {
-                    var imageUrl = imageUrls[key];
-                    var directory = iconDirectories[key];
-                    var fileName = $"{championId}.webp";
-                    var filePath = Path.Combine(directory, fileName);
-
-                    try
-                    {
-                        var imageBytes = await HttpClient.GetByteArrayAsync(imageUrl);
-                        var webpBytes = ConvertImageToWebP(imageBytes);
-                        await File.WriteAllBytesAsync(filePath, webpBytes);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Failed to process {key} for Champion ID {championId}: {ex.Message}");
-                    }
-                }
-                
-                var patchVersionId = PatchVersions
-                    .Where(p => p.PatchVersion == patchLastUpdated)
-                    .Select(p => p.Id)
-                    .FirstOrDefault();
-                
-                championsList.Add(new Champions
-                {
-                    Id = championId,
-                    Name = championName,
-                    PatchLastUpdated = patchVersionId
-                });
+                var filePath = Path.Combine(iconDirs[key], $"{champId}.webp");
+                imageTasks.Add(Task.Run(() => DownloadAndSaveImageAsync(url, filePath, $"{key} for Champion ID {champId}")));
             }
 
-            if (championsList.Count == 0) throw new Exception("Champion List is Empty");
-
-            await context.BulkInsertOrUpdateOrDeleteAsync(championsList);
+            championsList.Add(new Champions { Id = champId, Name = champName });
         }
-        catch (Exception e)
+        await Task.WhenAll(imageTasks);
+        if (championsList.Count == 0)
+            throw new Exception("Champion List is Empty");
+        await context.BulkInsertOrUpdateAsync(championsList, options =>
+            options.UpdateByProperties = [nameof(Champions.Id)]);
+    }
+
+    private async Task UpdateQueuesAsync()
+    {
+        using var doc = await GetJsonDocumentAsync(QueueJsonUrl);
+        var queueList = doc.RootElement.EnumerateArray()
+            .Select(q => new Queues
+            {
+                Id = (short)q.GetProperty("id").GetInt32(),
+                Name = q.GetProperty("shortName").GetString() ?? string.Empty
+            })
+            .OrderBy(q => q.Id)
+            .GroupBy(q => q.Id)
+            .Select(g => g.First())
+            .ToList();
+
+        if (!queueList.Any()) throw new Exception("Queue List is Empty");
+        await context.BulkInsertOrUpdateAsync(queueList, options =>
+            options.UpdateByProperties = [nameof(Queues.Id)]);
+    }
+
+    private async Task UpdateProfileIconsAsync()
+    {
+        var profileIconsDir = Path.Combine(_wwwrootPath, "images", "ProfileIcons");
+        EnsureDirectory(profileIconsDir);
+
+        using var doc = await GetJsonDocumentAsync(ProfileIconJsonUrl);
+        foreach (var profileIcon in doc.RootElement.EnumerateArray())
         {
-            throw new Exception("Failed to Update Champions", e);
+            var iconId = profileIcon.GetProperty("id").GetInt16();
+            if (!profileIcon.TryGetProperty("iconPath", out var iconPathEl)) continue;
+            var iconPath = iconPathEl.GetString() ?? string.Empty;
+            var imageUrl = GetAssetUrl(ProfileIconJsonUrl, iconPath);
+            var filePath = Path.Combine(profileIconsDir, $"{iconId}.webp");
+            await DownloadAndSaveImageAsync(imageUrl, filePath, $"Profile Icon ID {iconId}");
         }
     }
 
-    private static async Task UpdateQueuesAsync()
+    private async Task UpdateSummonerSpellsAsync()
     {
-        var queueList = new List<Queues>();
+        var spellsDir = Path.Combine(_wwwrootPath, "images", "SummonerSpells");
+        EnsureDirectory(spellsDir);
+    
+        using var summonerSpellDoc = await GetJsonDocumentAsync(SummonerSpellJsonUrl);
+        foreach (var summonerSpell in summonerSpellDoc.RootElement.EnumerateArray().SkipLast(3))
+        {
+            var spellId = summonerSpell.GetProperty("id").GetInt16();
+            var iconPath = summonerSpell.GetProperty("iconPath").GetString() ?? string.Empty;
+            var fileName = $"{iconPath.Split('/').Last().ToLower()}";
+            var imageUrl = $"{SummonerSpellAssetUrl}{fileName}";
+            var filePath = Path.Combine(spellsDir, $"{spellId}.webp");
+            await DownloadAndSaveImageAsync(imageUrl, filePath, $"Summoner Spell ID {spellId}");
+        }
+    }
+
+    private async Task UpdateRunesAsync()
+    {
+        var runesDir = Path.Combine(_wwwrootPath, "images", "Runes");
+        EnsureDirectory(runesDir);
         
-        try
+        using var runeDoc = await GetJsonDocumentAsync(RuneJsonUrl);
+        foreach (var rune in runeDoc.RootElement.EnumerateArray())
         {
-            await using var context = CreateSeioriContext();
-            await using var queueJsonStream = await HttpClient.GetStreamAsync(QueueJsonUrl);
-            using var queueJsonDoc = await JsonDocument.ParseAsync(queueJsonStream);
-            
-            var queueJsonList = queueJsonDoc.RootElement.EnumerateArray();
-            
-            while (queueJsonList.MoveNext())
-            {
-                var queue = queueJsonList.Current;
-                var queueId = queue.GetProperty("id").GetInt32();
-                var queueName = queue.GetProperty("shortName").GetString() ?? string.Empty;
-                
-                queueList.Add(
-                    new Queues()
-                    {
-                        Id = (short)queueId,
-                        Name = queueName,
-                    }
-                );
-            }
-            
-            if (queueList.Count == 0) throw new Exception("Queue List is Empty");   
-            
-            queueList = queueList
-                .OrderBy(q => q.Id)
-                .GroupBy(q => q.Id)
-                .Select(q => q.First())
-                .ToList();
-            
-            await context.BulkInsertOrUpdateOrDeleteAsync(queueList);
+            var runeId = rune.GetProperty("id").GetInt16();
+            var iconPath = rune.GetProperty("iconPath").GetString() ?? string.Empty;
+            var imageUrl = GetAssetUrl(RuneJsonUrl, iconPath);
+            var filePath = Path.Combine(runesDir, $"{runeId}.webp");
+            await DownloadAndSaveImageAsync(imageUrl, filePath, $"Rune ID {runeId}");
         }
-        catch (Exception e)
+
+        using var runePageDoc = await GetJsonDocumentAsync(RunePageJsonUrl);
+        var styles = runePageDoc.RootElement.GetProperty("styles").EnumerateArray();
+        foreach (var style in styles)
         {
-            throw new Exception("Failed to Update Queues", e);
+            var styleId = style.GetProperty("id").GetInt16();
+            var iconPath = style.GetProperty("iconPath").GetString() ?? string.Empty;
+            var imageUrl = GetAssetUrl(RunePageJsonUrl, iconPath);
+            var filePath = Path.Combine(runesDir, $"{styleId}.webp");
+            await DownloadAndSaveImageAsync(imageUrl, filePath, $"Rune Page ID {styleId}");
         }
     }
-    
-    private static async Task UpdateProfileIconsAsync()
+
+    private async Task UpdateItemsAsync()
     {
-        var profileIconsDirectory = Path.Combine(_wwwrootPath, "images", "ProfileIcons");
+        var itemsDir = Path.Combine(_wwwrootPath, "images", "Items");
+        EnsureDirectory(itemsDir);
 
-        try
+        using var doc = await GetJsonDocumentAsync(ItemJsonUrl);
+        foreach (var item in doc.RootElement.EnumerateArray())
         {
-            await using var context = CreateSeioriContext();
-            
-            if (!Directory.Exists(profileIconsDirectory))
-            {
-                Directory.CreateDirectory(profileIconsDirectory);
-            }
-            
-            await using var profileIconJsonStream = await HttpClient.GetStreamAsync(ProfileIconJsonUrl);
-            using var profileIconJsonDoc = await JsonDocument.ParseAsync(profileIconJsonStream);
-
-            var profileIconJsonList = profileIconJsonDoc.RootElement.EnumerateArray();
-
-            while (profileIconJsonList.MoveNext())
-            {
-                var profileIcon = profileIconJsonList.Current;
-                var profileIconId = profileIcon.GetProperty("id").GetInt16();
-
-                string profileIconIconPath;
-                if (profileIcon.TryGetProperty("iconPath", out var iconPathElement))
-                {
-                    profileIconIconPath = iconPathElement.GetString() ?? string.Empty;
-                }
-                else
-                {
-                    continue;
-                }
-
-                var profileIconImageUrl = GetAssetUrl(ProfileIconJsonUrl, profileIconIconPath);
-
-                try
-                {
-                    var imageBytes = await HttpClient.GetByteArrayAsync(profileIconImageUrl);
-                    var webpBytes = ConvertImageToWebP(imageBytes);
-                    
-                    var fileName = $"{profileIconId}.webp";
-                    var filePath = Path.Combine(profileIconsDirectory, fileName);
-
-                    await File.WriteAllBytesAsync(filePath, webpBytes);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"Failed to process Profile Icon ID {profileIconId}: {e.Message}");
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            throw new Exception("Failed to Update Profile Icons", e);
+            var itemId = item.GetProperty("id").GetInt32();
+            var iconPath = item.GetProperty("iconPath").GetString() ?? string.Empty;
+            var fileName = $"{iconPath.Split('/').Last().ToLower()}";
+            var imageUrl = $"{ItemAssetUrl}{fileName}";
+            var filePath = Path.Combine(itemsDir, $"{itemId}.webp");
+            await DownloadAndSaveImageAsync(imageUrl, filePath, $"Item ID {itemId}");
         }
     }
-    
-    private static async Task UpdateSummonerSpellsAsync()
-    {
-        var summonerSpellsDirectory = Path.Combine(_wwwrootPath, "images", "SummonerSpells");
-        
-        try
-        {
-            await using var context = CreateSeioriContext();
-            
-            if (!Directory.Exists(summonerSpellsDirectory))
-            {
-                Directory.CreateDirectory(summonerSpellsDirectory);
-            }
-            
-            var latestPatchVersion = await context.PatchVersions
-                .Where(p => p.IsLatest)
-                .Select(p => p.PatchVersion)
-                .FirstOrDefaultAsync();
-            
-            if (string.IsNullOrEmpty(latestPatchVersion)) throw new Exception("Latest Patch Version is Empty");
-            
-            await using var summonerSpellJsonStream = await HttpClient.GetStreamAsync(string.Format(SummonerSpellJsonUrl, $"{latestPatchVersion}.1"));
-            using var summonerSpellJsonDoc = await JsonDocument.ParseAsync(summonerSpellJsonStream);
-            
-            var summonerSpellJsonList = summonerSpellJsonDoc.RootElement.GetProperty("data").EnumerateObject();
-            
-            while (summonerSpellJsonList.MoveNext())
-            {
-                var summonerSpell = summonerSpellJsonList.Current;
-                var summonerSpellId = short.Parse(summonerSpell.Value.GetProperty("key").GetString() ?? string.Empty);
-                var summonerSpellIconPath = summonerSpell.Value.GetProperty("image").GetProperty("full").GetString() ?? string.Empty;
-                var summonerSpellImageUrl = string.Format(SummonerSpellAssetUrl, $"{latestPatchVersion}.1", summonerSpellIconPath);
 
-                try
-                {
-                    var imageBytes = await HttpClient.GetByteArrayAsync(summonerSpellImageUrl);
-                    var webpBytes = ConvertImageToWebP(imageBytes);
-                
-                    var fileName = $"{summonerSpellId}.webp";
-                    var filePath = Path.Combine(summonerSpellsDirectory, fileName);
-                
-                    await File.WriteAllBytesAsync(filePath, webpBytes);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"Failed to process Summoner Spell ID {summonerSpellId}: {e.Message}");
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            throw new Exception("Failed to Update Summoner Spells", e);
-        }
-    }
-    
-    private static async Task UpdateRunesAsync()
-    {
-        var runesDirectory = Path.Combine(_wwwrootPath, "images", "Runes");
-        
-        try
-        {
-            if (!Directory.Exists(runesDirectory))
-            {
-                Directory.CreateDirectory(runesDirectory);
-            }
-            
-            await using var runeJsonStream = await HttpClient.GetStreamAsync(RuneJsonUrl);
-            using var runeJsonDoc = await JsonDocument.ParseAsync(runeJsonStream);
-            
-            var runeJsonList = runeJsonDoc.RootElement.EnumerateArray();
-            
-            while (runeJsonList.MoveNext())
-            {
-                var rune = runeJsonList.Current;
-                var runeId = rune.GetProperty("id").GetInt16();
-                var runeIconPath = rune.GetProperty("iconPath").GetString() ?? string.Empty;
-                var runeImageUrl = GetAssetUrl(RuneJsonUrl, runeIconPath);
-
-                try
-                {
-                    var imageBytes = await HttpClient.GetByteArrayAsync(runeImageUrl);
-                    var webpBytes = ConvertImageToWebP(imageBytes);
-                
-                    var fileName = $"{runeId}.webp";
-                    var filePath = Path.Combine(runesDirectory, fileName);
-                
-                    await File.WriteAllBytesAsync(filePath, webpBytes);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"Failed to process Rune ID {runeId}: {e.Message}");
-                }
-            }
-            
-            await using var runePageJsonStream = await HttpClient.GetStreamAsync(RunePageJsonUrl);
-            using var runePageJsonDoc = await JsonDocument.ParseAsync(runePageJsonStream);
-            
-            var runePageJsonList = runePageJsonDoc.RootElement.GetProperty("styles").EnumerateArray();
-            
-            while (runePageJsonList.MoveNext())
-            {
-                var runePage = runePageJsonList.Current;
-                var runePageId = runePage.GetProperty("id").GetInt16();
-                var runePageIconPath = runePage.GetProperty("iconPath").GetString() ?? string.Empty;
-                var runePageImageUrl = GetAssetUrl(RunePageJsonUrl, runePageIconPath);
-
-                try
-                {
-                    var imageBytes = await HttpClient.GetByteArrayAsync(runePageImageUrl);
-                    var webpBytes = ConvertImageToWebP(imageBytes);
-                
-                    var fileName = $"{runePageId}.webp";
-                    var filePath = Path.Combine(runesDirectory, fileName);
-                
-                    await File.WriteAllBytesAsync(filePath, webpBytes);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"Failed to process Rune Page ID {runePageId}: {e.Message}");
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            throw new Exception("Failed to Update Runes", e);
-        }
-    }
-    
-    private static async Task UpdateItemsAsync()
-    {
-        var itemsDirectory = Path.Combine(_wwwrootPath, "images", "Items");
-        
-        try
-        {
-            if (!Directory.Exists(itemsDirectory))
-            {
-                Directory.CreateDirectory(itemsDirectory);
-            }
-            
-            await using var itemJsonStream = await HttpClient.GetStreamAsync(ItemJsonUrl);
-            using var itemJsonDoc = await JsonDocument.ParseAsync(itemJsonStream);
-            
-            var itemJsonList = itemJsonDoc.RootElement.EnumerateArray();
-            
-            while (itemJsonList.MoveNext())
-            {
-                var item = itemJsonList.Current;
-                var itemId = item.GetProperty("id").GetInt32();
-                var itemIconPath = item.GetProperty("iconPath").GetString() ?? string.Empty;
-                var itemImageUrl = $"{ItemAssetUrl}{itemIconPath.Split('/').Last().ToLower()}";;
-
-                try
-                {
-                    var imageBytes = await HttpClient.GetByteArrayAsync(itemImageUrl);
-                    var webpBytes = ConvertImageToWebP(imageBytes);
-                
-                    var fileName = $"{itemId}.webp";
-                    var filePath = Path.Combine(itemsDirectory, fileName);
-                
-                    await File.WriteAllBytesAsync(filePath, webpBytes);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"Failed to process Item ID {itemId}: {e.Message}");
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            throw new Exception("Failed to Update Items", e);
-        }
-    }
-    
     private static string GetAssetUrl(string baseUrl, string assetPath)
     {
-        var baseUrlIndex = baseUrl.IndexOf("v1/", StringComparison.Ordinal);
-        var assetPathIndex = assetPath.IndexOf("v1/", StringComparison.Ordinal);
-        
-        return baseUrl[..baseUrlIndex] + assetPath[assetPathIndex..].ToLower();
+        var baseIndex = baseUrl.IndexOf("v1/", StringComparison.Ordinal);
+        var assetIndex = assetPath.IndexOf("v1/", StringComparison.Ordinal);
+        return baseUrl[..baseIndex] + assetPath[assetIndex..].ToLower();
     }
-    
+
     private static byte[] ConvertImageToWebP(byte[] imageBytes)
     {
         using var inputStream = new MemoryStream(imageBytes);
         using var image = Image.Load(inputStream);
         using var outputStream = new MemoryStream();
-        
         image.Mutate(x => x.Resize(new ResizeOptions
         {
-            Size = new Size(75, 75),
+            Size = new Size(64, 64),
             Mode = ResizeMode.Crop
         }));
-        
-        var encoder = new WebpEncoder { Quality = 75 };
-        image.Save(outputStream, encoder);
-
+        image.Save(outputStream, new WebpEncoder { Quality = 50 });
         return outputStream.ToArray();
     }
 }

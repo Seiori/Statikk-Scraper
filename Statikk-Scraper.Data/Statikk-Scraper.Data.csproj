@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Camille.RiotGames" Version="3.0.0-nightly-2025-02-19-d2b94715b7" />
+      <PackageReference Include="Camille.RiotGames" Version="3.0.0-nightly-2025-02-26-d2b94715b7" />
       <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.2" />
     </ItemGroup>
 

@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using Camille.Enums;
+using Statikk_Scraper.Data.Models;
 using Statikk_Scraper.Models;
 
 namespace Sta.Data.Models;
@@ -15,5 +16,5 @@ public class Summoners
     public required short SummonerLevel { get; init; }
     public DateTime LastUpdated { get; init; }
     
-    public ICollection<Participants> MatchHistory { get; init; }
+    public ICollection<SummonerRanks> Ranks { get; init; }
 }

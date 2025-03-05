@@ -3,11 +3,13 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Statikk_Scraper.Models;
 
-public class Champions
+public class Patches
 {
-    [Key] [DatabaseGenerated(DatabaseGeneratedOption.None)] 
+    [Key] 
     public short Id { get; init; }
     
-    [MaxLength(40)] 
-    public required string Name { get; init; }
+    [MaxLength(5)] 
+    public required string PatchVersion { get; init; }
+    
+    public bool IsLatest { get; set; }
 }

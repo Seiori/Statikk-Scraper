@@ -6,11 +6,15 @@
         <RootNamespace>Statikk_Scraper</RootNamespace>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Camille.RiotGames" Version="3.0.0-nightly-2025-02-19-d2b94715b7" />
+      <PackageReference Include="Camille.RiotGames" Version="3.0.0-nightly-2025-02-26-d2b94715b7" />
       <PackageReference Include="EFCore.BulkExtensions.SqlServer" Version="9.0.1" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0-preview.1.25080.5" />
+      <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0-preview.1.25080.5" />
       <PackageReference Include="SixLabors.ImageSharp" Version="3.1.6" />
     </ItemGroup>
 
