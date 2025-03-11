@@ -81,7 +81,6 @@ namespace Statikk_Scraper.Data
                 entity.Property(p => p.Team).HasConversion<short>();
                 entity.Property(p => p.Role).HasConversion<byte>();
                 entity.Property(p => p.Kda).HasColumnType("decimal(9,2)");
-                entity.Property(p => p.CreepScorePerMinute).HasColumnType("decimal(9,2)");
             });
             
             // Patches

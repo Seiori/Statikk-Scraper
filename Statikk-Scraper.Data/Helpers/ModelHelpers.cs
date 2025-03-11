@@ -83,8 +83,18 @@ public static  class ModelHelpers
                 ChampionsId  = (short)p.ChampionId,
                 Role         = ConvertRole(p.TeamPosition),
                 
+                PrimaryPageId           = (short)(primaryStyle?.Style ?? 0),
                 PrimaryPageKeystoneId   = (short)(primaryStyle?.Selections?[0].Perk ?? 0),
+                PrimaryPageRow1Id       = (short)(primaryStyle?.Selections?[1].Perk ?? 0),
+                PrimaryPageRow2Id       = (short)(primaryStyle?.Selections?[2].Perk ?? 0),
+                PrimaryPageRow3Id       = (short)(primaryStyle?.Selections?[3].Perk ?? 0),
                 SecondaryPageId         = (short)(secondaryStyle?.Style ?? 0),
+                SecondaryPageOption1Id  = (short)(secondaryStyle?.Selections?[0].Perk ?? 0),
+                SecondaryPageOption2Id  = (short)(secondaryStyle?.Selections?[1].Perk ?? 0),
+                
+                OffensiveStatId = (short)(perks.StatPerks.Offense),
+                DefensiveStatId = (short)(perks.StatPerks.Defense),
+                FlexStatId = (short)(perks.StatPerks.Flex),
                 
                 SummonerSpell1Id = (short)p.Summoner1Id,
                 SummonerSpell2Id = (short)p.Summoner2Id,
@@ -107,8 +117,9 @@ public static  class ModelHelpers
                 
                 LargestMultiKill = (byte)p.LargestMultiKill,
                 
-                DamageDealt = p.TotalDamageDealtToChampions,
-                DamageTaken = p.TotalDamageTaken,
+                AttackDamageDealt = p.PhysicalDamageDealtToChampions,
+                MagicDamageDealt = p.MagicDamageDealtToChampions,
+                TrueDamageDealt = p.TrueDamageDealtToChampions,
 
                 Summoner = summoner
             };

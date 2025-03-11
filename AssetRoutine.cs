@@ -163,7 +163,7 @@ public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory,
             .Select(g => g.First())
             .ToList();
 
-        if (!queueList.Any()) throw new Exception("Queue List is Empty");
+        if (queueList.Count == 0) throw new Exception("Queue List is Empty");
         await context.BulkInsertOrUpdateAsync(queueList, options =>
             options.UpdateByProperties = [nameof(Queues.Id)]);
     }
@@ -238,6 +238,8 @@ public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory,
         foreach (var item in doc.RootElement.EnumerateArray())
         {
             var itemId = item.GetProperty("id").GetInt32();
+            var isBoots = false;
+            foreach (var category in item.GetProperty("categories").EnumerateArray().Where(category => category.GetString() == "Boots")) isBoots = true;
             var iconPath = item.GetProperty("iconPath").GetString() ?? string.Empty;
             var fileName = $"{iconPath.Split('/').Last().ToLower()}";
             var imageUrl = $"{ItemAssetUrl}{fileName}";
