@@ -7,14 +7,14 @@ namespace Sta.Data.Models;
 
 public class Summoners
 {
-    [Key] public int Id { get; init; } 
+    [Key] public int Id { get; set; } 
     [MaxLength(78)] public required string Puuid { get; set; }
-    [MaxLength(58)] public required string SummonerId { get; init; }
-    public required PlatformRoute Platform { get; init; }
+    [MaxLength(58)] public required string SummonerId { get; set; }
+    public required PlatformRoute Platform { get; set; }
     [MaxLength(40)] public required string RiotId { get; set; }
-    public required short ProfileIconId { get; init; }
-    public required short SummonerLevel { get; init; }
-    public DateTime LastUpdated { get; init; }
+    public required short ProfileIconId { get; set; }
+    public required short SummonerLevel { get; set; }
+    public DateTime LastUpdated { get; set; }
     
-    public ICollection<SummonerRanks> Ranks { get; init; }
+    public ICollection<SummonerRanks> Ranks { get; set; }
 }

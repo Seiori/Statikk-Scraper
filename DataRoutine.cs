@@ -1,8 +1,7 @@
-﻿using System.Text.Json;
+﻿using System.Collections.Concurrent;
 using Camille.Enums;
 using Camille.RiotGames;
 using Camille.RiotGames.LeagueExpV4;
-using Camille.RiotGames.MatchV5;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
 using Sta.Data.Models;
@@ -21,222 +20,185 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
 
     private static readonly Dictionary<PlatformRoute, RegionalRoute> Regions = new()
     {
-        [PlatformRoute.EUW1] = RegionalRoute.EUROPE,
-        [PlatformRoute.KR] = RegionalRoute.ASIA,
         [PlatformRoute.NA1] = RegionalRoute.AMERICAS,
+        [PlatformRoute.KR] = RegionalRoute.ASIA,
+        [PlatformRoute.EUW1] = RegionalRoute.EUROPE
     };
-
-    private static readonly Tier[] Tiers =
-    [
-        Tier.CHALLENGER, Tier.GRANDMASTER, Tier.MASTER,
-        Tier.DIAMOND, Tier.EMERALD, Tier.PLATINUM,
-        Tier.GOLD, Tier.SILVER, Tier.BRONZE, Tier.IRON
-    ];
+    private static readonly Tier[] Tiers = [Tier.CHALLENGER, Tier.GRANDMASTER, Tier.MASTER, Tier.DIAMOND, Tier.EMERALD, Tier.PLATINUM, Tier.GOLD, Tier.SILVER, Tier.BRONZE, Tier.IRON];
     private static readonly Division[] Divisions = [Division.I, Division.II, Division.III, Division.IV];
-
+    
     public async Task BeginDataRoutine()
     {
-        var totalMatches = 0;
-        await using var context = await contextFactory.CreateDbContextAsync();
-
         try
         {
-            foreach (var tier in Tiers)
-            {
-                foreach (var division in Divisions)
+            var summonerRanksDict = new ConcurrentDictionary<string, SummonerRanks>();
+            var matchesDict = new ConcurrentDictionary<string, Matches>();
+            
+            await Task.WhenAll(
+                Regions.Keys.Select(async platform =>
                 {
-                    for (var page = 1; ; page++)
-                    {
-                        var matchArrays = await Task.WhenAll(
-                            Regions.Keys.Select(platform => FetchMatchDataList(platform, tier, division, page))
-                        ).ConfigureAwait(false);
-
-                        if (matchArrays.All(m => m.Length == 0))
-                            break;
-
-                        var matchesList = matchArrays.SelectMany(m => m).ToArray();
-                        var distinctSummoners = matchesList
-                            .SelectMany(m => m.Participants)
-                            .Select(p => p.Summoner)
-                            .DistinctBy(s => s.Puuid)
-                            .ToDictionary(s => s.Puuid);
-
-                        await context.BulkInsertOrUpdateAsync(
-                            distinctSummoners.Values,
-                            options =>
-                            {
-                                options.SetOutputIdentity = true;
-                                options.UpdateByProperties = [nameof(Summoners.Puuid)];
-                            }).ConfigureAwait(false);
-
-                        var summonerRanksList = distinctSummoners.Values
-                            .Select(s =>
-                            {
-                                var rank = s.Ranks.FirstOrDefault();
-                                if (rank != null) rank.SummonersId = s.Id;
-                                return rank;
-                            })
-                            .Where(r => r != null)
-                            .ToArray();
-
-                        await context.BulkInsertOrUpdateAsync(
-                            summonerRanksList!,
-                            options => options.UpdateByProperties = [nameof(SummonerRanks.SummonersId), nameof(SummonerRanks.Queue)]
-                        ).ConfigureAwait(false);
-
-                        Parallel.ForEach(matchesList, match =>
+                    var tierDivisionTasks = Tiers.SelectMany(_ => Divisions, (tier, division) => (tier, division))
+                        .Where(pair => !(pair.tier is Tier.CHALLENGER or Tier.GRANDMASTER or Tier.MASTER && pair.division != Division.I))
+                        .Select(async pair =>
                         {
-                            var participantRanks = new List<SummonerRanks>();
-                            foreach (var participant in match.Participants)
+                            await using var context = await contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+                            var page = 1;
+                            await foreach (var leagueEntries in GetLeagueEntriesAsync(platform, pair.tier, pair.division))
                             {
-                                var puuid = participant.Summoner.Puuid;
-                                var summoner = distinctSummoners[puuid];
-                                participant.SummonersId = summoner.Id;
-        
-                                // Retrieve the rank (if any) and add to our list for averaging.
-                                var rank = summoner.Ranks.FirstOrDefault();
-                                if (rank != null)
+                                var summonerRanks = leagueEntries.ToDictionary(
+                                    le => le.Puuid,
+                                    le => new SummonerRanks
+                                    {
+                                        Queue = QueueType.RANKED_SOLO_5x5,
+                                        Tier = pair.tier,
+                                        Division = pair.division,
+                                        LeaguePoints = (short)le.LeaguePoints,
+                                        Wins = (short)le.Wins,
+                                        Losses = (short)le.Losses,
+                                        TotalGames = (short)(le.Wins + le.Losses)
+                                    }
+                                );
+
+                                foreach (var kvp in summonerRanks)
                                 {
-                                    participantRanks.Add(rank);
+                                    summonerRanksDict.AddOrUpdate(kvp.Key, kvp.Value, (_, _) => kvp.Value);
                                 }
-        
-                                // Clear the Summoner reference.
-                                participant.Summoner = null;
+
+                                var matchIdList = await FetchMatchIdsFromPuuids(context, platform, Regions[platform], summonerRanks.Keys);
+                                matchIdList = matchIdList.Except(matchesDict.Keys);
+                                var matchDataList = await Task.WhenAll(matchIdList.Select(id => FetchMatchDataForMatchId(Regions[platform], id)));
+                                matchDataList.OfType<Matches>().ToList().ForEach(match =>
+                                    matchesDict.TryAdd($"{match.Platform}_{match.GameId}", match)
+                                );
+                                
+                                Console.WriteLine($"Processed {matchDataList.Length} Matches and {summonerRanks.Count} Summoner Ranks for: {platform} - {pair.tier} - {pair.division} - Page {page} at {DateTime.UtcNow}");
+                                page++;
                             }
-    
-                            // Compute and assign the average Tier and Division if any ranks exist.
-                            if (participantRanks.Count == 0) return;
-                            match.Tier = (Tier)Math.Round(participantRanks.Average(r => (int)r.Tier));
-                            match.Division = (Division)Math.Round(participantRanks.Average(r => (int)r.Division));
-                            match.LeaguePoints = (short)Math.Round(participantRanks.Average(r => r.LeaguePoints));
                         });
+                    await Task.WhenAll(tierDivisionTasks);
+                    return Task.CompletedTask;
+                })
+            );
+            
+            await using var finalContext = await contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+                
+            var distinctSummoners = matchesDict.Values
+                .SelectMany(m => m.Participants)
+                .Select(p => p.Summoner)
+                .DistinctBy(s => s.Puuid)
+                .ToDictionary(s => s.Puuid);
+            
+            await finalContext.BulkInsertOrUpdateAsync(distinctSummoners.Values, options =>
+            {
+                options.SetOutputIdentity = true;
+                options.UpdateByProperties = [nameof(Summoners.Puuid)];
+            }).ConfigureAwait(false);
 
-                        await context.BulkInsertOrUpdateAsync(
-                            matchesList,
-                            options => options.IncludeGraph = true
-                        ).ConfigureAwait(false);
-
-                        Console.WriteLine($"Imported {matchesList.Length} Matches for: {tier} - {division} - Page {page} - {DateTime.Now}");
-                        totalMatches += matchesList.Length;
-                    }
+            foreach (var key in summonerRanksDict.Keys)
+            {
+                if (distinctSummoners.TryGetValue(key, out var summoner))
+                {
+                    summonerRanksDict[key].SummonersId = summoner.Id;
+                }
+                else
+                {
+                    summonerRanksDict.TryRemove(key, out _);
                 }
             }
+
+            await finalContext.BulkInsertOrUpdateAsync(summonerRanksDict.Values, options =>
+                options.UpdateByProperties = [nameof(SummonerRanks.SummonersId), nameof(SummonerRanks.Queue)]
+            ).ConfigureAwait(false);
+
+            Parallel.ForEach(matchesDict.Values, match =>
+            {
+                var participantRanks = match.Participants
+                    .Select(p => summonerRanksDict.GetValueOrDefault(p.Summoner.Puuid))
+                    .Where(rank => rank != null)
+                    .ToArray();
+
+                if (participantRanks.Length == 0)
+                    return;
+
+                match.Tier = (Tier)Math.Round(participantRanks.Average(r => (int)r!.Tier));
+                match.Division = (Division)Math.Round(participantRanks.Average(r => (int)r!.Division));
+                match.LeaguePoints = (short)Math.Round(participantRanks.Average(r => r!.LeaguePoints));
+
+                foreach (var participant in match.Participants)
+                {
+                    participant.Summoner = null!;
+                }
+            });
+            
+            await finalContext.BulkInsertAsync(matchesDict.Values, options => options.IncludeGraph = true).ConfigureAwait(false);
         }
         catch (Exception e)
         {
-            Console.WriteLine("An error has occurred. Please check the Audit for more information.");
-            context.ChangeTracker.Clear();
-
-            var audit = new Audit
-            {
-                Method = nameof(BeginDataRoutine),
-                Input = JsonSerializer.Serialize(new { e.Message }),
-                Exception = e.Message,
-                StackTrace = e.StackTrace ?? string.Empty
-            };
-
-            await context.AddAsync(audit).ConfigureAwait(false);
-            await context.SaveChangesAsync().ConfigureAwait(false);
+            Console.WriteLine("Message: " + e.Message);
+            Console.WriteLine("Stack Trace: " + e.StackTrace);
         }
-        Console.WriteLine($"Imported {totalMatches} Matches in Total");
+    }
+    
+    private async IAsyncEnumerable<LeagueEntry[]> GetLeagueEntriesAsync(PlatformRoute platform, Tier tier, Division division)
+    {
+        for (var page = 1;; page++)
+        {
+            var leagueEntries = await FetchLeagueEntriesForPlatform(platform, tier, division, page);
+            if (leagueEntries.Length == 0)
+                yield break;
+
+            yield return leagueEntries;
+        }
     }
 
-    private async Task<Matches[]> FetchMatchDataList(PlatformRoute platform, Tier tier, Division division, int page)
+    private static async Task<T?> RetryAsync<T>(Func<Task<T>> operation)
     {
-        await using var context = await contextFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var leagueEntries = await FetchLeagueEntriesAsync(platform, tier, division, page).ConfigureAwait(false);
-        if (leagueEntries.Length == 0)
-            return [];
-
-        var leagueEntriesBySummoner = leagueEntries.ToDictionary(le => le.SummonerId);
-        var region = Regions[platform];
-        var puuids = await FetchPuuidListFromLeagueEntryList(context, platform, leagueEntriesBySummoner.Keys).ConfigureAwait(false);
-        var matchIds = await FetchMatchIdListForPuuidList(context, platform, region, puuids).ConfigureAwait(false);
-
-        var matchDataList = await Task.WhenAll(matchIds.Select(id => FetchMatchDataForMatchId(region, id)))
-                                       .ConfigureAwait(false);
-        var matchesList = matchDataList
-            .Where(m => m is not null)
-            .Select(ModelHelpers.ParseRiotMatchData!)
-            .ToArray();
-
-        foreach (var match in matchesList)
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
-            foreach (var participant in match.Participants)
+            try
             {
-                if (leagueEntriesBySummoner.TryGetValue(participant.Summoner.SummonerId, out var leagueEntry))
+                return await operation().ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Retrying attempt {attempt} of 3: {e.Message}");
+                if (attempt == 3)
                 {
-                    participant.Summoner.Ranks.Add(new SummonerRanks
-                    {
-                        Queue = QueueType.RANKED_SOLO_5x5,
-                        Tier = tier,
-                        Division = division,
-                        LeaguePoints = (short)leagueEntry.LeaguePoints,
-                        Wins = (short)leagueEntry.Wins,
-                        Losses = (short)leagueEntry.Losses,
-                        TotalGames = (short)(leagueEntry.Wins + leagueEntry.Losses),
-                    });
+                    return default;
                 }
+                await Task.Delay(1000 * attempt).ConfigureAwait(false);
             }
         }
-        return matchesList;
+        throw new InvalidOperationException("Unreachable code in RetryAsync.");
     }
 
-    private async Task<IEnumerable<string>> FetchPuuidListFromLeagueEntryList(Context context, PlatformRoute platform, IEnumerable<string> summonerIds)
+    private async Task<IEnumerable<string>> FetchMatchIdsFromPuuids(Context context, PlatformRoute platform, RegionalRoute region, IEnumerable<string> puuidList)
     {
-        var existingSummoners = await context.Summoners
-            .AsNoTracking()
-            .Where(s => s.Platform == platform && summonerIds.Contains(s.SummonerId))
-            .Select(s => new { s.SummonerId, s.Puuid })
-            .ToArrayAsync().ConfigureAwait(false);
-
-        var existingDict = existingSummoners.ToDictionary(s => s.SummonerId, s => s.Puuid);
-        var missingIds = summonerIds.Except(existingDict.Keys);
-        var fetchedPuuids = (await Task.WhenAll(missingIds.Select(id => FetchPuuidForSummonerId(platform, id))).ConfigureAwait(false))
-            .Where(puuid => !string.IsNullOrEmpty(puuid));
-        return existingDict.Values.Concat(fetchedPuuids);
-    }
-
-    private async Task<IEnumerable<string>> FetchMatchIdListForPuuidList(Context context, PlatformRoute platform, RegionalRoute region, IEnumerable<string> puuids)
-    {
-        var matchIdArrays = await Task.WhenAll(puuids.Select(puuid => FetchMatchIdListForPuuid(region, puuid))).ConfigureAwait(false);
-        var gameIds = matchIdArrays.SelectMany(ids => ids)
-                                   .Select(id => long.Parse(id[(id.IndexOf('_') + 1)..]))
-                                   .ToHashSet();
+        var matchIdLists = await Task.WhenAll(puuidList.Select(puuid => FetchMatchIdListForPuuid(region, puuid)));
+    
+        var gameIds = matchIdLists
+            .SelectMany(ids => ids)
+            .Select(id => long.Parse(id[(id.IndexOf('_') + 1)..]))
+            .ToHashSet();
 
         var existingGameIds = await context.Matches
             .AsNoTracking()
             .Where(m => m.Platform == platform && gameIds.Contains(m.GameId))
             .Select(m => m.GameId)
-            .ToHashSetAsync().ConfigureAwait(false);
+            .ToHashSetAsync();
 
-        var newGameIds = gameIds.Except(existingGameIds);
-        return newGameIds.Select(id => $"{platform}_{id}").ToHashSet();
+        return gameIds.Except(existingGameIds)
+            .Select(id => $"{platform}_{id}")
+            .ToHashSet();
     }
 
-    private async Task<LeagueEntry[]> FetchLeagueEntriesAsync(PlatformRoute platform, Tier tier, Division division, int page)
-    {
-        if (tier is Tier.CHALLENGER or Tier.GRANDMASTER or Tier.MASTER && division != Division.I)
-            return [];
-
-        return await riotGamesApi.LeagueExpV4()
-            .GetLeagueEntriesAsync(platform, QueueType.RANKED_SOLO_5x5, tier, division, page)
-            .ConfigureAwait(false) ?? [];
-    }
-
-    private Task<string> FetchPuuidForSummonerId(PlatformRoute platform, string summonerId) =>
-        riotGamesApi.SummonerV4().GetBySummonerIdAsync(platform, summonerId)
-            .ContinueWith(t => t.Result.Puuid);
-
+    private async Task<LeagueEntry[]> FetchLeagueEntriesForPlatform(PlatformRoute platform, Tier tier, Division division, int page) => 
+        await RetryAsync(() => riotGamesApi.LeagueExpV4().GetLeagueEntriesAsync(platform, QueueType.RANKED_SOLO_5x5, tier, division, page)) ?? [];
+    
     private async Task<IEnumerable<string>> FetchMatchIdListForPuuid(RegionalRoute region, string puuid) =>
-        await riotGamesApi.MatchV5()
-            .GetMatchIdsByPUUIDAsync(region, puuid, 100, startTime: StartTime, endTime: EndTime)
-            .ConfigureAwait(false);
+        await RetryAsync(() => riotGamesApi.MatchV5().GetMatchIdsByPUUIDAsync(region, puuid, 100, startTime: StartTime, endTime: EndTime, queue: Queue.SUMMONERS_RIFT_5V5_RANKED_SOLO)) ?? [];
 
-    private async Task<Match?> FetchMatchDataForMatchId(RegionalRoute region, string matchId) =>
-        await riotGamesApi.MatchV5().GetMatchAsync(region, matchId).ConfigureAwait(false);
-
-    private async Task<Timeline> FetchMatchTimelineForMatchId(RegionalRoute region, string matchId) =>
-        await riotGamesApi.MatchV5().GetTimelineAsync(region, matchId)
-            .ConfigureAwait(false) ?? new Timeline();
+    private async Task<Matches?> FetchMatchDataForMatchId(RegionalRoute region, string matchId) =>
+        (await RetryAsync(() => riotGamesApi.MatchV5().GetMatchAsync(region, matchId))) is { } result
+            ? ModelHelpers.ParseRiotMatchData(result) : null;
 }

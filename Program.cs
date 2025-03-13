@@ -26,7 +26,8 @@ var serviceProvider = new ServiceCollection()
     {
         var riotGamesApiConfig = new RiotGamesApiConfig.Builder(riotApiKey)
             {
-                Retries = 10
+                Retries = 10,
+                MaxConcurrentRequests = 100000
             }
         .Build();
 
@@ -38,7 +39,7 @@ using var scope = serviceProvider.CreateScope();
 var assetRoutine = scope.ServiceProvider.GetRequiredService<AssetRoutine>();
 var dataRoutine = scope.ServiceProvider.GetRequiredService<DataRoutine>();
 
-await assetRoutine.BeginAssetRoutine(rootPatch);
+//await assetRoutine.BeginAssetRoutine(rootPatch);
 await dataRoutine.BeginDataRoutine();
 
 var endTime = DateTime.Now;
