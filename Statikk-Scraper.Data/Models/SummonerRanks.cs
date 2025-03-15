@@ -1,4 +1,6 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using Camille.Enums;
+using Sta.Data.Models;
 
 namespace Statikk_Scraper.Data.Models;
 
@@ -12,4 +14,7 @@ public class SummonerRanks
     public short Wins { get; init; }
     public short Losses { get; init; }
     public short TotalGames { get; init; }
+    
+    [ForeignKey(nameof(SummonersId))]
+    public Summoners Summoner { get; init; }
 }

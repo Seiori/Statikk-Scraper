@@ -1,4 +1,5 @@
-﻿using Camille.RiotGames.Enums;
+﻿using System.ComponentModel.DataAnnotations.Schema;
+using Camille.RiotGames.Enums;
 using Sta.Data.Models;
 using Statikk_Scraper.Models.Enums;
 
@@ -42,8 +43,13 @@ namespace Statikk_Scraper.Models
         public int MagicDamageDealt { get; init; }
         public int TrueDamageDealt { get; init; }
         
+        [ForeignKey(nameof(SummonersId))]
         public Summoners Summoner { get; set; }
+        
+        [ForeignKey(nameof(MatchesId))]
         public Matches Match { get; init; }
+        
+        [ForeignKey(nameof(ChampionsId))]
         public Champions Champion { get; init; }
     }
 }

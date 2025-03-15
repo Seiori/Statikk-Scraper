@@ -28,74 +28,99 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
     
     public async Task BeginDataRoutine()
     {
-        try
-        {
-            await Task.WhenAll(
-                Regions.Keys.Select(async platform =>
-                {
-                    var tierDivisionTasks = Tiers.SelectMany(_ => Divisions, (tier, division) => (tier, division))
-                        .Where(pair => !(pair.tier is Tier.CHALLENGER or Tier.GRANDMASTER or Tier.MASTER && pair.division != Division.I))
-                        .Select(async pair =>
+        await Task.WhenAll(
+            Regions.Keys.Select(async platform =>
+            {
+                var tierDivisionTasks = Tiers.SelectMany(_ => Divisions, (tier, division) => (tier, division))
+                    .Where(pair => !(pair.tier is Tier.CHALLENGER or Tier.GRANDMASTER or Tier.MASTER && pair.division != Division.I))
+                    .Select(async pair =>
+                    {
+                        await using var context = await contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+                        await foreach (var (page, summonerRanks) in GetSummonerRanksAsync(platform, pair.tier, pair.division).ConfigureAwait(false))
                         {
-                            await using var context = await contextFactory.CreateDbContextAsync().ConfigureAwait(false);
-                            await foreach (var (page, summonerRanks) in GetSummonerRanksAsync(platform, pair.tier, pair.division).ConfigureAwait(false))
+                            if (summonerRanks.Count is 0) break;
+                            
+                            IEnumerable<string> matchIdList;
+                            try
                             {
-                                if (summonerRanks.Count is 0) break;
-                                var matchIdList = await FetchMatchIdsFromPuuids(context, platform, Regions[platform], summonerRanks.Keys).ConfigureAwait(false);
-                                var matchesList = (await Task.WhenAll(matchIdList.Select(id => FetchMatchDataForMatchId(Regions[platform], id))).ConfigureAwait(false)).OfType<Matches>().ToArray();
-                                if (matchesList.Length is 0) continue;
-                                
-                                var distinctSummoners = matchesList
-                                    .SelectMany(m => m.Participants)
-                                    .Select(p => p.Summoner)
-                                    .DistinctBy(s => s.Puuid)
-                                    .ToDictionary(s => s.Puuid);
-                                
+                                matchIdList = await FetchMatchIdsFromPuuids(context, platform, Regions[platform], summonerRanks.Keys).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                await LogAuditErrorAsync(context, "FetchMatchIdsFromPuuids", ex.Message, ex.StackTrace ?? "").ConfigureAwait(false);
+                                continue;
+                            }
+                            
+                            var matchesList = (await Task.WhenAll(matchIdList.Select(id => FetchMatchDataForMatchId(Regions[platform], id))).ConfigureAwait(false)).OfType<Matches>().ToArray();
+                            if (matchesList.Length is 0) continue;
+                            
+                            var distinctSummoners = matchesList
+                                .SelectMany(m => m.Participants)
+                                .Select(p => p.Summoner)
+                                .DistinctBy(s => s.Puuid)
+                                .ToDictionary(s => s.Puuid);
+                            
+                            try
+                            {
                                 await context.BulkInsertOrUpdateAsync(distinctSummoners.Values, options =>
                                 {
                                     options.SetOutputIdentity = true;
                                     options.UpdateByProperties = [nameof(Summoners.Puuid)];
                                 }).ConfigureAwait(false);
-
-                                foreach (var key in summonerRanks.Keys.ToArray())
+                            }
+                            catch (Exception ex)
+                            {
+                                await LogAuditErrorAsync(context, "BulkInsertOrUpdate_DistinctSummoners", ex.Message, ex.StackTrace ?? "").ConfigureAwait(false);
+                            }
+                            
+                            foreach (var key in summonerRanks.Keys.ToArray())
+                            {
+                                if (distinctSummoners.TryGetValue(key, out var summoner))
                                 {
-                                    if (distinctSummoners.TryGetValue(key, out var summoner))
-                                    {
-                                        summonerRanks[key].SummonersId = summoner.Id;
-                                    }
-                                    else
-                                    {
-                                        summonerRanks.Remove(key, out _);
-                                    }
+                                    summonerRanks[key].SummonersId = summoner.Id;
                                 }
-
+                                else
+                                {
+                                    summonerRanks.Remove(key, out _);
+                                }
+                            }
+                            
+                            try
+                            {
                                 await context.BulkInsertOrUpdateAsync(summonerRanks.Values, options =>
                                     options.UpdateByProperties = [nameof(SummonerRanks.SummonersId), nameof(SummonerRanks.Queue)]
                                 ).ConfigureAwait(false);
-
-                                Parallel.ForEach(matchesList, match =>
-                                {
-                                    foreach (var participant in match.Participants)
-                                    {
-                                        participant.Summoner = null!;
-                                    }
-                                });
-                                
-                                await context.BulkInsertAsync(matchesList, options => options.IncludeGraph = true).ConfigureAwait(false);
-                                
-                                Console.WriteLine($"Processed {matchesList.Length} Matches and {summonerRanks.Count} Summoner Ranks for: {platform} - {pair.tier} - {pair.division} - Page {page}");
                             }
-                        });
-                    await Task.WhenAll(tierDivisionTasks);
-                    return Task.CompletedTask;
-                })
-            );
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine("Message: " + e.Message);
-            Console.WriteLine("Stack Trace: " + e.StackTrace);
-        }
+                            catch (Exception ex)
+                            {
+                                await LogAuditErrorAsync(context, "BulkInsertOrUpdate_SummonerRanks", ex.Message, ex.StackTrace ?? "").ConfigureAwait(false);
+                            }
+                            
+                            Parallel.ForEach(matchesList, match =>
+                            {
+                                foreach (var participant in match.Participants)
+                                {
+                                    participant.SummonersId = distinctSummoners[participant.Summoner.Puuid].Id;
+                                    participant.Summoner = null!;
+                                }
+                            });
+                            
+                            try
+                            {
+                                await context.BulkInsertAsync(matchesList, options => options.IncludeGraph = true).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                await LogAuditErrorAsync(context, "BulkInsert_Matches", ex.Message, ex.StackTrace ?? "").ConfigureAwait(false);
+                            }
+                            
+                            Console.WriteLine($"Processed {matchesList.Length} Matches and {summonerRanks.Count} Summoner Ranks for: {platform} - {pair.tier} - {pair.division} - Page {page}");
+                        }
+                    });
+                await Task.WhenAll(tierDivisionTasks);
+                return Task.CompletedTask;
+            })
+        );
     }
 
     private async IAsyncEnumerable<(int Page, Dictionary<string, SummonerRanks> SummonerRanks)> GetSummonerRanksAsync(PlatformRoute platform, Tier tier, Division division)
@@ -124,7 +149,27 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
         }
     }
     
-    private async Task<T?> RetryAsync<T>(Func<Task<T>> operation)
+    private static async Task LogAuditErrorAsync(Context context, string method, string message, string stackTrace)
+    {
+        try
+        {
+            context.ChangeTracker.Clear();
+            context.Audit.Add(new Audit
+            {
+                Method = method,
+                Input = "",
+                Exception = message,
+                StackTrace = stackTrace
+            });
+            await context.SaveChangesAsync().ConfigureAwait(false);
+        }
+        catch (Exception auditEx)
+        {
+            Console.WriteLine($"Audit insertion failed in {method}: {auditEx.Message}");
+        }
+    }
+    
+    private static async Task<T?> RetryAsync<T>(Func<Task<T>> operation)
     {
         for (var attempt = 1; attempt <= 3; attempt++)
         {

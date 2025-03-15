@@ -24,7 +24,10 @@ var serviceProvider = new ServiceCollection()
     .AddScoped<DataRoutine>()
     .AddSingleton<RiotGamesApi>(provider =>
     {
-        var riotGamesApiConfig = new RiotGamesApiConfig.Builder(riotApiKey).Build();
+        var riotGamesApiConfig = new RiotGamesApiConfig.Builder(riotApiKey)
+        {
+            MaxConcurrentRequests = 50000
+        }.Build();
 
         return RiotGamesApi.NewInstance(riotGamesApiConfig);
     })
