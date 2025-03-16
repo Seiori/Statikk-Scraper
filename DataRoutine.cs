@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-using System.Net;
-using Camille.Enums;
+﻿using Camille.Enums;
 using Camille.RiotGames;
 using Camille.RiotGames.LeagueExpV4;
 using EFCore.BulkExtensions;
@@ -23,8 +21,8 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
     private static readonly Dictionary<PlatformRoute, RegionalRoute> Regions = new()
     {
         [PlatformRoute.NA1] = RegionalRoute.AMERICAS,
-        [PlatformRoute.KR] = RegionalRoute.ASIA,
-        [PlatformRoute.EUW1] = RegionalRoute.EUROPE
+        [PlatformRoute.EUW1] = RegionalRoute.EUROPE,
+        [PlatformRoute.KR] = RegionalRoute.ASIA
     };
     private static readonly Tier[] Tiers = [Tier.CHALLENGER, Tier.GRANDMASTER, Tier.MASTER, Tier.DIAMOND, Tier.EMERALD, Tier.PLATINUM, Tier.GOLD, Tier.SILVER, Tier.BRONZE, Tier.IRON];
     private static readonly Division[] Divisions = [Division.I, Division.II, Division.III, Division.IV];
@@ -70,7 +68,10 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
     {
         var matchIdList = await FetchMatchIdsFromPuuids(context, platform, Regions[platform], summonerRanks.Keys).ConfigureAwait(false);
         
-        var matchesList = (await Task.WhenAll(matchIdList.Select(id => FetchMatchDataForMatchId(Regions[platform], id))).ConfigureAwait(false)).OfType<Matches>().ToArray();
+        var matchesList = (await Task.WhenAll(matchIdList.Select(id => FetchMatchDataForMatchId(Regions[platform], id)))
+                             .ConfigureAwait(false))
+                             .OfType<Matches>()
+                             .ToArray();
         if (matchesList.Length is 0) return;
         
         var distinctSummoners = matchesList
@@ -81,31 +82,48 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
 
         try
         {
+            // Bulk update/insert distinct summoners.
             await context.BulkInsertOrUpdateAsync(distinctSummoners.Values, options =>
             {
                 options.SetOutputIdentity = true;
                 options.UpdateByProperties = [nameof(Summoners.Puuid)];
             }).ConfigureAwait(false);
+            
+            var upToDateSummoners = await context.Summoners
+                .Where(s => distinctSummoners.Keys.Contains(s.Puuid))
+                .Select(s => new { s.Puuid, s.Id })
+                .ToDictionaryAsync(s => s.Puuid);
+
+            foreach (var key in upToDateSummoners.Keys)
+            {
+                if (distinctSummoners.TryGetValue(key, out var summoner))
+                {
+                    summoner.Id = upToDateSummoners[key].Id;
+                }
+            }
+            
+            if (distinctSummoners.Values.Any(s => s.Id == 0))
+            {
+                throw new Exception("Summoner has Id of 0");
+            }
         }
         catch (Exception e)
         {
-            Console.WriteLine("Error Inserting Matches");
+            Console.WriteLine("Error Inserting Summoners");
             Console.WriteLine("Error Message: " + e.Message);
-            Console.WriteLine("Error StackTrace: " + e.StackTrace);
             return;
         }
         
-        foreach (var key in summonerRanks.Keys.ToArray())
-        {
-            if (distinctSummoners.TryGetValue(key, out var summoner))
-            {
-                summonerRanks[key].SummonersId = summoner.Id;
-            }
-            else
-            {
-                summonerRanks.Remove(key, out _);
-            }
-        }
+        summonerRanks = summonerRanks
+            .Where(kvp => distinctSummoners.ContainsKey(kvp.Key))
+            .ToDictionary(
+                kvp => kvp.Key,
+                kvp =>
+                {
+                    kvp.Value.SummonersId = distinctSummoners[kvp.Key].Id;
+                    return kvp.Value;
+                }
+            );
 
         try
         {
@@ -115,9 +133,8 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
         }
         catch (Exception e)
         {
-            Console.WriteLine("Error Inserting Matches");
+            Console.WriteLine("Error Inserting Summoner Ranks");
             Console.WriteLine("Error Message: " + e.Message);
-            Console.WriteLine("Error StackTrace: " + e.StackTrace);
             return;
         }
 
@@ -138,7 +155,6 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
         {
             Console.WriteLine("Error Inserting Matches");
             Console.WriteLine("Error Message: " + e.Message);
-            Console.WriteLine("Error StackTrace: " + e.StackTrace);
             return;
         }
         
@@ -149,7 +165,6 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
     {
         for (var page = 1;; page++)
         {
-            Console.WriteLine($"Fetching {platform} - {tier} - {division} - Page {page}");
             var leagueEntries = await FetchLeagueEntriesForPlatform(platform, tier, division, page);
             if (leagueEntries.Length == 0)
                 yield break;

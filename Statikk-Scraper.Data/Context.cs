@@ -117,7 +117,7 @@ namespace Statikk_Scraper.Data
             {
                 entity.HasKey(s => s.Id);
                 entity.HasAlternateKey(s => s.Puuid);
-                entity.HasAlternateKey(s => new { s.SummonerId, s.Platform }).IsClustered();
+                entity.HasAlternateKey(s => new { s.Platform, s.SummonerId }).IsClustered();
                 
                 entity.Property(s => s.Id).ValueGeneratedOnAdd();
                 entity.Property(s => s.Puuid).HasMaxLength(78).IsRequired();
