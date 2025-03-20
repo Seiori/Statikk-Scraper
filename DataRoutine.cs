@@ -26,19 +26,22 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
     };
     private static readonly Tier[] Tiers = [Tier.CHALLENGER, Tier.GRANDMASTER, Tier.MASTER, Tier.DIAMOND, Tier.EMERALD, Tier.PLATINUM, Tier.GOLD, Tier.SILVER, Tier.BRONZE, Tier.IRON];
     private static readonly Division[] Divisions = [Division.I, Division.II, Division.III, Division.IV];
-
+    
     public async Task BeginDataRoutine()
     {
-        var processBlock = new ActionBlock<(PlatformRoute platform, Tier tier, Division division, int page, Dictionary<string, SummonerRanks> summonerRanks)>(
-            async item =>
-            {
-                await using var context = await contextFactory.CreateDbContextAsync().ConfigureAwait(false);
-                await ProcessPage(context, item.platform, item.tier, item.division, item.page, item.summonerRanks).ConfigureAwait(false);
-            },
-            new ExecutionDataflowBlockOptions
-            {
-                MaxDegreeOfParallelism = Environment.ProcessorCount * 2
-            }
+        var processBlocks = Regions.Keys.ToDictionary(
+            platform => platform,
+            _ => new ActionBlock<(PlatformRoute platform, Tier tier, Division division, int page, Dictionary<string, SummonerRanks> summonerRanks)>(
+                async item =>
+                {
+                    await using var context = await contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+                    await ProcessPage(context, item.platform, item.tier, item.division, item.page, item.summonerRanks).ConfigureAwait(false);
+                },
+                new ExecutionDataflowBlockOptions
+                {
+                    MaxDegreeOfParallelism = 1 
+                }
+            )
         );
         
         var producerTasks = Regions.Keys.Select(async platform =>
@@ -50,15 +53,18 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
                     await foreach (var (page, summonerRanks) in GetSummonerRanksAsync(platform, pair.tier, pair.division).ConfigureAwait(false))
                     {
                         if (summonerRanks.Count == 0) break;
-                        processBlock.Post((platform, pair.tier, pair.division, page, summonerRanks));
+                        processBlocks[platform].Post((platform, pair.tier, pair.division, page, summonerRanks));
                     }
                 });
             await Task.WhenAll(tierDivisionTasks);
         });
         await Task.WhenAll(producerTasks);
         
-        processBlock.Complete();
-        await processBlock.Completion;
+        foreach (var block in processBlocks.Values)
+        {
+            block.Complete();
+        }
+        await Task.WhenAll(processBlocks.Values.Select(b => b.Completion));
         
         await using var context = await contextFactory.CreateDbContextAsync().ConfigureAwait(false);
         await context.Database.ExecuteSqlRawAsync("EXECUTE SetRankedMatchAverages");
@@ -88,24 +94,6 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
                 options.SetOutputIdentity = true;
                 options.UpdateByProperties = [nameof(Summoners.Puuid)];
             }).ConfigureAwait(false);
-            
-            var upToDateSummoners = await context.Summoners
-                .Where(s => distinctSummoners.Keys.Contains(s.Puuid))
-                .Select(s => new { s.Puuid, s.Id })
-                .ToDictionaryAsync(s => s.Puuid);
-
-            foreach (var key in upToDateSummoners.Keys)
-            {
-                if (distinctSummoners.TryGetValue(key, out var summoner))
-                {
-                    summoner.Id = upToDateSummoners[key].Id;
-                }
-            }
-            
-            if (distinctSummoners.Values.Any(s => s.Id == 0))
-            {
-                throw new Exception("Summoner has Id of 0");
-            }
         }
         catch (Exception e)
         {
@@ -120,7 +108,7 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
                 kvp => kvp.Key,
                 kvp =>
                 {
-                    kvp.Value.SummonersId = distinctSummoners[kvp.Key].Id;
+                    kvp.Value.SummonersId = distinctSummoners[kvp.Key]!.Id;
                     return kvp.Value;
                 }
             );
@@ -176,10 +164,9 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
                     Queue = QueueType.RANKED_SOLO_5x5,
                     Tier = tier,
                     Division = division,
-                    LeaguePoints = (short)le.LeaguePoints,
-                    Wins = (short)le.Wins,
-                    Losses = (short)le.Losses,
-                    TotalGames = (short)(le.Wins + le.Losses)
+                    LeaguePoints = (ushort)le.LeaguePoints,
+                    Wins = (ushort)le.Wins,
+                    Losses = (ushort)le.Losses,
                 }
             );
             

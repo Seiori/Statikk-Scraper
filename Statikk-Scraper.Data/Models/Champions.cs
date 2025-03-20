@@ -6,7 +6,7 @@ namespace Statikk_Scraper.Models;
 public class Champions
 {
     [Key] [DatabaseGenerated(DatabaseGeneratedOption.None)] 
-    public short Id { get; init; }
+    public ushort Id { get; init; }
     
     [MaxLength(40)] 
     public required string Name { get; init; }

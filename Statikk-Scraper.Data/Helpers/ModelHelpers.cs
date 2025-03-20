@@ -40,11 +40,11 @@ public static  class ModelHelpers
             {
                 Team = t.TeamId,
 
-                Ban1 = (short)banChampionIds[0],
-                Ban2 = (short)banChampionIds[1],
-                Ban3 = (short)banChampionIds[2],
-                Ban4 = (short)banChampionIds[3],
-                Ban5 = (short)banChampionIds[4],
+                Ban1 = (ushort)banChampionIds[0],
+                Ban2 = (ushort)banChampionIds[1],
+                Ban3 = (ushort)banChampionIds[2],
+                Ban4 = (ushort)banChampionIds[3],
+                Ban5 = (ushort)banChampionIds[4],
 
                 BaronKills      = (byte)objectives.Baron.Kills,
                 ChampionKills   = (byte)objectives.Champion.Kills,
@@ -71,8 +71,8 @@ public static  class ModelHelpers
                 SummonerId    = p.SummonerId,
                 Platform      = Enum.Parse<PlatformRoute>(matchInfo.PlatformId),
                 RiotId        = NormalizeRiotId($"{p.RiotIdGameName}#{p.RiotIdTagline}"),
-                ProfileIconId = (short)p.ProfileIcon,
-                SummonerLevel = (short)p.SummonerLevel,
+                ProfileIconId = (ushort)p.ProfileIcon,
+                SummonerLevel = (ushort)p.SummonerLevel,
                 LastUpdated   = DateTime.UtcNow,
                 Ranks = new List<SummonerRanks>()
             };
@@ -80,24 +80,24 @@ public static  class ModelHelpers
             participants[i] = new Participants
             {
                 Team         = p.TeamId,
-                ChampionsId  = (short)p.ChampionId,
+                ChampionsId  = (ushort)p.ChampionId,
                 Role         = ConvertRole(p.TeamPosition),
                 
-                PrimaryPageId           = (short)(primaryStyle?.Style ?? 0),
-                PrimaryPageKeystoneId   = (short)(primaryStyle?.Selections?[0].Perk ?? 0),
-                PrimaryPageRow1Id       = (short)(primaryStyle?.Selections?[1].Perk ?? 0),
-                PrimaryPageRow2Id       = (short)(primaryStyle?.Selections?[2].Perk ?? 0),
-                PrimaryPageRow3Id       = (short)(primaryStyle?.Selections?[3].Perk ?? 0),
-                SecondaryPageId         = (short)(secondaryStyle?.Style ?? 0),
-                SecondaryPageOption1Id  = (short)(secondaryStyle?.Selections?[0].Perk ?? 0),
-                SecondaryPageOption2Id  = (short)(secondaryStyle?.Selections?[1].Perk ?? 0),
+                PrimaryPageId           = (ushort)(primaryStyle?.Style ?? 0),
+                PrimaryPageKeystoneId   = (ushort)(primaryStyle?.Selections[0].Perk ?? 0),
+                PrimaryPageRow1Id       = (ushort)(primaryStyle?.Selections[1].Perk ?? 0),
+                PrimaryPageRow2Id       = (ushort)(primaryStyle?.Selections[2].Perk ?? 0),
+                PrimaryPageRow3Id       = (ushort)(primaryStyle?.Selections[3].Perk ?? 0),
+                SecondaryPageId         = (ushort)(secondaryStyle?.Style ?? 0),
+                SecondaryPageOption1Id  = (ushort)(secondaryStyle?.Selections[0].Perk ?? 0),
+                SecondaryPageOption2Id  = (ushort)(secondaryStyle?.Selections[1].Perk ?? 0),
                 
-                OffensiveStatId = (short)(perks.StatPerks.Offense),
-                DefensiveStatId = (short)(perks.StatPerks.Defense),
-                FlexStatId = (short)(perks.StatPerks.Flex),
+                OffensiveStatId = (ushort)perks.StatPerks.Offense,
+                DefensiveStatId = (ushort)perks.StatPerks.Defense,
+                FlexStatId = (ushort)perks.StatPerks.Flex,
                 
-                SummonerSpell1Id = (short)p.Summoner1Id,
-                SummonerSpell2Id = (short)p.Summoner2Id,
+                SummonerSpell1Id = (ushort)p.Summoner1Id,
+                SummonerSpell2Id = (ushort)p.Summoner2Id,
 
                 Kills  = (byte)p.Kills,
                 Deaths = (byte)p.Deaths,
@@ -105,21 +105,21 @@ public static  class ModelHelpers
                 Kda    = (decimal)(p.Challenges?.Kda ?? 0.0),
 
                 KillParticipation = (byte)((p.Challenges?.KillParticipation ?? 0.0) * 100),
-                CreepScore        = (short)p.TotalMinionsKilled,
+                CreepScore        = (ushort)p.TotalMinionsKilled,
 
-                Item1Id = (short)p.Item0,
-                Item2Id = (short)p.Item1,
-                Item3Id = (short)p.Item2,
-                Item4Id = (short)p.Item3,
-                Item5Id = (short)p.Item4,
-                Item6Id = (short)p.Item5,
-                Item7Id = (short)p.Item6,
+                Item1Id = (ushort)p.Item0,
+                Item2Id = (ushort)p.Item1,
+                Item3Id = (ushort)p.Item2,
+                Item4Id = (ushort)p.Item3,
+                Item5Id = (ushort)p.Item4,
+                Item6Id = (ushort)p.Item5,
+                Item7Id = (ushort)p.Item6,
                 
                 LargestMultiKill = (byte)p.LargestMultiKill,
                 
-                AttackDamageDealt = p.PhysicalDamageDealtToChampions,
-                MagicDamageDealt = p.MagicDamageDealtToChampions,
-                TrueDamageDealt = p.TrueDamageDealtToChampions,
+                AttackDamageDealt = (uint)p.PhysicalDamageDealtToChampions,
+                MagicDamageDealt = (uint)p.MagicDamageDealtToChampions,
+                TrueDamageDealt = (uint)p.TrueDamageDealtToChampions,
 
                 Summoner = summoner
             };

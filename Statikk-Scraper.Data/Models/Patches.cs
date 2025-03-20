@@ -5,8 +5,8 @@ namespace Statikk_Scraper.Models;
 
 public class Patches
 {
-    [Key] 
-    public short Id { get; init; }
+    [Key] [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public ushort Id { get; init; }
     
     [MaxLength(5)] 
     public required string PatchVersion { get; init; }

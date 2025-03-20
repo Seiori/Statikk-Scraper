@@ -34,7 +34,6 @@ public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory,
         {
             await UpdatePatchVersionsAsync();
             await UpdateChampionsAsync();
-            await UpdateQueuesAsync();
             await UpdateProfileIconsAsync();
             await UpdateSummonerSpellsAsync();
             await UpdateRunesAsync();
@@ -140,32 +139,13 @@ public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory,
                 imageTasks.Add(Task.Run(() => DownloadAndSaveImageAsync(url, filePath, $"{key} for Champion ID {champId}")));
             }
 
-            championsList.Add(new Champions { Id = champId, Name = champName });
+            championsList.Add(new Champions { Id = (ushort)champId, Name = champName });
         }
         await Task.WhenAll(imageTasks);
         if (championsList.Count == 0)
             throw new Exception("Champion List is Empty");
         await context.BulkInsertOrUpdateAsync(championsList, options =>
             options.UpdateByProperties = [nameof(Champions.Id)]);
-    }
-
-    private async Task UpdateQueuesAsync()
-    {
-        using var doc = await GetJsonDocumentAsync(QueueJsonUrl);
-        var queueList = doc.RootElement.EnumerateArray()
-            .Select(q => new Queues
-            {
-                Id = (short)q.GetProperty("id").GetInt32(),
-                Name = q.GetProperty("shortName").GetString() ?? string.Empty
-            })
-            .OrderBy(q => q.Id)
-            .GroupBy(q => q.Id)
-            .Select(g => g.First())
-            .ToList();
-
-        if (queueList.Count == 0) throw new Exception("Queue List is Empty");
-        await context.BulkInsertOrUpdateAsync(queueList, options =>
-            options.UpdateByProperties = [nameof(Queues.Id)]);
     }
 
     private async Task UpdateProfileIconsAsync()

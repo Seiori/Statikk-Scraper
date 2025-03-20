@@ -1,4 +1,5 @@
-﻿using Camille.RiotGames;
+﻿using System.Collections.Immutable;
+using Camille.RiotGames;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Statikk_Scraper;
@@ -18,7 +19,7 @@ var championsDirectory = Path.Combine(imagesDirectory, "Champions");
 if (!Directory.Exists(championsDirectory)) Directory.CreateDirectory(championsDirectory);
 
 var serviceProvider = new ServiceCollection()
-    .AddDbContextFactory<Context>(options => options.UseSqlServer(connectionString))
+    .AddDbContextFactory<Context>(options => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)))
     .AddHttpClient()
     .AddScoped<AssetRoutine>()
     .AddScoped<DataRoutine>()

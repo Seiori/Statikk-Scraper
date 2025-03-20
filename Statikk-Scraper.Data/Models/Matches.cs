@@ -8,7 +8,7 @@ namespace Statikk_Scraper.Models
     public class Matches
     {
         [Key] [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int Id { get; init; }
+        public uint Id { get; init; }
         
         public PlatformRoute Platform { get; init; }
         
@@ -18,19 +18,18 @@ namespace Statikk_Scraper.Models
         
         public Queue Queue { get; init; }
         
-        public Tier Tier { get; set; }
+        public Tier Tier { get; init; }
         
-        public Division Division { get; set; }
+        public Division Division { get; init; }
         
-        public short LeaguePoints { get; set; }
+        public ushort LeaguePoints { get; init; }
+        
+        public Team WinningTeam { get; init; }
         
         public DateTime DatePlayed { get; init; }
         
         public TimeSpan TimePlayed { get; init; }
         
-        public Team WinningTeam { get; init; }
-        
-        // Foreign Key Objects
         [ForeignKey(nameof(PatchesId))]
         public Patches? Patch { get; init; }
         
