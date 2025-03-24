@@ -1,14 +1,14 @@
 ﻿using Camille.Enums;
 using Camille.RiotGames;
 using Camille.RiotGames.LeagueExpV4;
-using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
-using Sta.Data.Models;
 using Statikk_Scraper.Data;
 using Statikk_Scraper.Data.Models;
 using Statikk_Scraper.Helpers;
 using Statikk_Scraper.Models;
 using System.Threading.Tasks.Dataflow;
+using Seiori.MySql;
+using Queue = Camille.Enums.Queue;
 
 namespace Statikk_Scraper;
 
@@ -22,27 +22,33 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
     {
         [PlatformRoute.NA1] = RegionalRoute.AMERICAS,
         [PlatformRoute.EUW1] = RegionalRoute.EUROPE,
-        [PlatformRoute.KR] = RegionalRoute.ASIA
+        [PlatformRoute.KR] = RegionalRoute.ASIA,
     };
     private static readonly Tier[] Tiers = [Tier.CHALLENGER, Tier.GRANDMASTER, Tier.MASTER, Tier.DIAMOND, Tier.EMERALD, Tier.PLATINUM, Tier.GOLD, Tier.SILVER, Tier.BRONZE, Tier.IRON];
     private static readonly Division[] Divisions = [Division.I, Division.II, Division.III, Division.IV];
     
     public async Task BeginDataRoutine()
     {
+        var patchesDict = await GetPatchesAsync();
+        
         var processBlocks = Regions.Keys.ToDictionary(
             platform => platform,
-            _ => new ActionBlock<(PlatformRoute platform, Tier tier, Division division, int page, Dictionary<string, SummonerRanks> summonerRanks)>(
-                async item =>
-                {
-                    await using var context = await contextFactory.CreateDbContextAsync().ConfigureAwait(false);
-                    await ProcessPage(context, item.platform, item.tier, item.division, item.page, item.summonerRanks).ConfigureAwait(false);
-                },
-                new ExecutionDataflowBlockOptions
-                {
-                    MaxDegreeOfParallelism = 1 
-                }
-            )
-        );
+            _ =>
+            {
+                var context = contextFactory.CreateDbContextAsync()
+                    .GetAwaiter()
+                    .GetResult();
+
+                return new ActionBlock<(PlatformRoute platform, Tier tier, Division division, int page, Dictionary<string, SummonerRanks> summonerRanks)>(
+                    async item =>
+                    {
+                        await ProcessPage(context, patchesDict, item.platform, item.tier, item.division, item.page, item.summonerRanks).ConfigureAwait(false);
+                    },
+                    new ExecutionDataflowBlockOptions
+                    {
+                        MaxDegreeOfParallelism = 1
+                    });
+            });
         
         var producerTasks = Regions.Keys.Select(async platform =>
         {
@@ -70,7 +76,19 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
         await context.Database.ExecuteSqlRawAsync("EXECUTE SetRankedMatchAverages");
     }
 
-    private async Task ProcessPage(Context context, PlatformRoute platform, Tier tier, Division division, int page, Dictionary<string, SummonerRanks> summonerRanks)
+    private async Task<Dictionary<string, ushort>> GetPatchesAsync()
+    {
+        await using var context = await contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        return await context.Patches
+            .AsNoTracking()
+            .OrderByDescending(p => p.Id)
+            .Take(2)
+            .Select(p => new { p.Id, p.PatchVersion })
+            .ToDictionaryAsync(p => p.PatchVersion, p => p.Id)
+            .ConfigureAwait(false);
+    }
+    
+    private async Task ProcessPage(Context context, Dictionary<string, ushort> patchesDict, PlatformRoute platform, Tier tier, Division division, int page, Dictionary<string, SummonerRanks> summonerRanks)
     {
         var matchIdList = await FetchMatchIdsFromPuuids(context, platform, Regions[platform], summonerRanks.Keys).ConfigureAwait(false);
         
@@ -85,15 +103,10 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
             .Select(p => p.Summoner)
             .DistinctBy(s => s.Puuid)
             .ToDictionary(s => s.Puuid);
-
+        
         try
         {
-            // Bulk update/insert distinct summoners.
-            await context.BulkInsertOrUpdateAsync(distinctSummoners.Values, options =>
-            {
-                options.SetOutputIdentity = true;
-                options.UpdateByProperties = [nameof(Summoners.Puuid)];
-            }).ConfigureAwait(false);
+            await context.BulkUpsertAsync(distinctSummoners.Values, options => options.SetOutputIdentity = true).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -115,9 +128,7 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
 
         try
         {
-            await context.BulkInsertOrUpdateAsync(summonerRanks.Values, options =>
-                options.UpdateByProperties = [nameof(SummonerRanks.SummonersId), nameof(SummonerRanks.Queue)]
-            ).ConfigureAwait(false);
+            await context.BulkUpsertAsync(summonerRanks.Values, options => { }).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -128,16 +139,21 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
 
         foreach (var match in matchesList)
         {
+            match.PatchesId = patchesDict[match.Patch!.PatchVersion];
             foreach (var participant in match.Participants)
             {
-                participant.SummonersId = distinctSummoners[participant.Summoner.Puuid].Id;
+                participant.SummonersId = distinctSummoners[participant.Summoner!.Puuid]!.Id;
                 participant.Summoner = null!;
             }
         }
 
         try
         {
-            await context.BulkInsertAsync(matchesList, options => options.IncludeGraph = true).ConfigureAwait(false);
+            await context.BulkInsertAsync(matchesList, options =>
+            {
+                options.SetOutputIdentity = true;
+                options.IncludeChildren = true;
+            }).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -148,7 +164,7 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
         
         Console.WriteLine($"Processed {matchesList.Length} Matches and {summonerRanks.Count} Summoner Ranks for: {platform} - {tier} - {division} - Page {page}");
     }
-
+    
     private async IAsyncEnumerable<(int Page, Dictionary<string, SummonerRanks> SummonerRanks)> GetSummonerRanksAsync(PlatformRoute platform, Tier tier, Division division)
     {
         for (var page = 1;; page++)
@@ -202,7 +218,7 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
     
         var gameIds = matchIdLists
             .SelectMany(ids => ids)
-            .Select(id => long.Parse(id[(id.IndexOf('_') + 1)..]))
+            .Select(id => ulong.Parse(id[(id.IndexOf('_') + 1)..]))
             .ToHashSet();
 
         var existingGameIds = await context.Matches

@@ -12,9 +12,9 @@ namespace Statikk_Scraper.Models
         
         public PlatformRoute Platform { get; init; }
         
-        public long GameId { get; init; }
+        public ulong GameId { get; init; }  
         
-        public short PatchesId { get; init; }
+        public ushort PatchesId { get; set; }
         
         public Queue Queue { get; init; }
         

@@ -48,7 +48,7 @@ namespace Statikk_Scraper.Models
         public uint TrueDamageDealt { get; init; }
         
         [ForeignKey(nameof(SummonersId))]
-        public Summoners? Summoner { get; set; }
+        public required Summoners Summoner { get; set; }
         
         [ForeignKey(nameof(MatchesId))]
         public Matches? Match { get; init; }

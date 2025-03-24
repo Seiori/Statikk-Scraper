@@ -2,6 +2,7 @@
 using Sta.Data.Models;
 using Statikk_Scraper.Data.Models;
 using Statikk_Scraper.Models;
+using Statikk_Scraper.Models.Enums;
 
 namespace Statikk_Scraper.Data;
 
@@ -33,7 +34,7 @@ public class Context(DbContextOptions<Context> options) : DbContext(options)
             entity.HasAlternateKey(s => new { s.Platform, s.SummonerId });
 
             entity.Property(s => s.Id).ValueGeneratedOnAdd();
-            entity.Property(s => s.Platform).HasConversion<ushort>();
+            entity.Property(s => s.Platform).HasConversion<byte>();
             entity.Property(s => s.LastUpdated).ValueGeneratedOnAddOrUpdate();
         });
             
@@ -95,6 +96,7 @@ public class Context(DbContextOptions<Context> options) : DbContext(options)
 
             entity.Property(p => p.Id).ValueGeneratedOnAdd();
             entity.Property(p => p.Team).HasConversion<ushort>();
+            entity.Property(p => p.Role).HasConversion<byte>();
             entity.Property(p => p.Kda).HasPrecision(5, 2);
         });
 

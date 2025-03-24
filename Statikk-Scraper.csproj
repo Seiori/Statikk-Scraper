@@ -12,11 +12,20 @@
 
     <ItemGroup>
       <PackageReference Include="Camille.RiotGames" Version="3.0.0-nightly-2025-03-07-d2b94715b7" />
-      <PackageReference Include="EFCore.BulkExtensions.MySql" Version="9.0.0-rc.1" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0-preview.1.25080.5" />
       <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0-preview.1.25080.5" />
       <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0-preview.3.efcore.9.0.0" />
       <PackageReference Include="SixLabors.ImageSharp" Version="3.1.7" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Reference Include="Seiori.MySql">
+        <HintPath>..\Seiori.MySql\bin\Debug\net9.0\Seiori.MySql.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Seiori.MySql\Seiori.MySql.csproj" />
     </ItemGroup>
 
 </Project>

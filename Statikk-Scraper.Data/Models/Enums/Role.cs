@@ -6,6 +6,6 @@ public enum Role
     Top,
     Jungle,
     Mid,
-    Bot,
+    Bottom,
     Support
 }

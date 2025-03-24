@@ -23,7 +23,7 @@ public static class EnumExtensions
             "TOP" => Role.Top,
             "JUNGLE" => Role.Jungle,
             "MIDDLE" => Role.Mid,
-            "BOTTOM" => Role.Bot,
+            "BOTTOM" => Role.Bottom,
             "UTILITY" => Role.Support,
             _ => Role.None
         };

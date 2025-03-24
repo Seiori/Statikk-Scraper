@@ -21,7 +21,7 @@ if (!Directory.Exists(championsDirectory)) Directory.CreateDirectory(championsDi
 var serviceProvider = new ServiceCollection()
     .AddDbContextFactory<Context>(options => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)))
     .AddHttpClient()
-    .AddScoped<AssetRoutine>()
+    //.AddScoped<AssetRoutine>()
     .AddScoped<DataRoutine>()
     .AddSingleton<RiotGamesApi>(provider =>
     {
@@ -35,7 +35,7 @@ var serviceProvider = new ServiceCollection()
     .BuildServiceProvider();
 
 using var scope = serviceProvider.CreateScope();
-var assetRoutine = scope.ServiceProvider.GetRequiredService<AssetRoutine>();
+//var assetRoutine = scope.ServiceProvider.GetRequiredService<AssetRoutine>();
 var dataRoutine = scope.ServiceProvider.GetRequiredService<DataRoutine>();
 
 //await assetRoutine.BeginAssetRoutine(rootPatch);

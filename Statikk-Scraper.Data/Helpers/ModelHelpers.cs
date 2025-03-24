@@ -127,14 +127,15 @@ public static  class ModelHelpers
         
         return new Matches
         {
-            GameId       = matchInfo.GameId,
+            GameId       = (ulong)matchInfo.GameId,
             Platform     = Enum.Parse<PlatformRoute>(matchInfo.PlatformId),
             Queue        = matchInfo.QueueId,
             DatePlayed   = DateTimeOffset.FromUnixTimeMilliseconds(matchInfo.GameCreation).UtcDateTime,
             TimePlayed   = TimeSpan.FromSeconds(matchInfo.GameDuration),
             WinningTeam  = winningTeam,
             Teams        = teams,
-            Participants = participants
+            Participants = participants,
+            Patch        = new Patches { PatchVersion = patchVersion }
         };
     }
 
