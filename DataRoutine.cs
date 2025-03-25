@@ -73,7 +73,7 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
         await Task.WhenAll(processBlocks.Values.Select(b => b.Completion));
         
         await using var context = await contextFactory.CreateDbContextAsync().ConfigureAwait(false);
-        await context.Database.ExecuteSqlRawAsync("EXECUTE SetRankedMatchAverages");
+        await context.Database.ExecuteSqlRawAsync("CALL UpdateMatchRanksForYesterday");
     }
 
     private async Task<Dictionary<string, ushort>> GetPatchesAsync()
