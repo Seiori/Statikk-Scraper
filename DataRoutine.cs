@@ -21,8 +21,6 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
     private static readonly Dictionary<PlatformRoute, RegionalRoute> Regions = new()
     {
         [PlatformRoute.NA1] = RegionalRoute.AMERICAS,
-        [PlatformRoute.EUW1] = RegionalRoute.EUROPE,
-        [PlatformRoute.KR] = RegionalRoute.ASIA,
     };
     private static readonly Tier[] Tiers = [Tier.CHALLENGER, Tier.GRANDMASTER, Tier.MASTER, Tier.DIAMOND, Tier.EMERALD, Tier.PLATINUM, Tier.GOLD, Tier.SILVER, Tier.BRONZE, Tier.IRON];
     private static readonly Division[] Divisions = [Division.I, Division.II, Division.III, Division.IV];
@@ -128,7 +126,7 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
 
         try
         {
-            await context.BulkUpsertAsync(summonerRanks.Values, options => { }).ConfigureAwait(false);
+            await context.BulkUpsertAsync(summonerRanks.Values, options => {}).ConfigureAwait(false);
         }
         catch (Exception e)
         {
