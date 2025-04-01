@@ -73,7 +73,7 @@ public class Context(DbContextOptions<Context> options) : DbContext(options)
             entity.HasAlternateKey(m => new { m.Platform, m.GameId });
 
             entity.Property(m => m.Id).ValueGeneratedOnAdd();
-            entity.Property(m => m.Platform).HasConversion<ushort>();
+            entity.Property(m => m.Platform).HasConversion<byte>();
             entity.Property(m => m.Queue).HasConversion<ushort>();
             entity.Property(m => m.Tier).HasConversion<byte>();
             entity.Property(m => m.Division).HasConversion<byte>();

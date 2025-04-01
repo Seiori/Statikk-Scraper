@@ -25,7 +25,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Seiori.MySql\Seiori.MySql.csproj" />
+      <ProjectReference Include="..\MySql-Bulk-Operations\Seiori.MySql.csproj" />
     </ItemGroup>
 
 </Project>
