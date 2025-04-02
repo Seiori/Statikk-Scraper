@@ -8,6 +8,7 @@ using Statikk_Scraper.Helpers;
 using Statikk_Scraper.Models;
 using System.Threading.Tasks.Dataflow;
 using Seiori.MySql;
+using Seiori.MySql.Enums;
 using Queue = Camille.Enums.Queue;
 
 namespace Statikk_Scraper;
@@ -21,8 +22,6 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
     private static readonly Dictionary<PlatformRoute, RegionalRoute> Regions = new()
     {
         [PlatformRoute.NA1] = RegionalRoute.AMERICAS,
-        [PlatformRoute.EUW1] = RegionalRoute.EUROPE,
-        [PlatformRoute.KR] = RegionalRoute.ASIA
     };
     private static readonly Tier[] Tiers = [Tier.CHALLENGER, Tier.GRANDMASTER, Tier.MASTER, Tier.DIAMOND, Tier.EMERALD, Tier.PLATINUM, Tier.GOLD, Tier.SILVER, Tier.BRONZE, Tier.IRON];
     private static readonly Division[] Divisions = [Division.I, Division.II, Division.III, Division.IV];
@@ -106,7 +105,7 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
         
         try
         {
-            await context.BulkUpsertAsync(distinctSummoners.Values, options => options.SetOutputIdentity = true).ConfigureAwait(false);
+            await context.BulkOperationAsync(BulkOperation.Upsert, distinctSummoners.Values, options => options.SetOutputIdentity = true).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -121,14 +120,16 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
                 kvp => kvp.Key,
                 kvp =>
                 {
-                    kvp.Value.SummonersId = distinctSummoners[kvp.Key]!.Id;
+                    kvp.Value.SummonersId = distinctSummoners[kvp.Key].Id;
                     return kvp.Value;
                 }
             );
 
+        var test = summonerRanks.Where(sr => sr.Value.SummonersId == 0);
+
         try
         {
-            await context.BulkUpsertAsync(summonerRanks.Values, options => {}).ConfigureAwait(false);
+            await context.BulkOperationAsync(BulkOperation.Upsert, summonerRanks.Values, options => {}).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -149,7 +150,7 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
 
         try
         {
-            await context.BulkInsertAsync(matchesList, options =>
+            await context.BulkOperationAsync(BulkOperation.Insert, matchesList, options =>
             {
                 options.SetOutputIdentity = true;
                 options.IncludeChildren = true;
