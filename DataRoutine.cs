@@ -138,9 +138,17 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
             return;
         }
 
-        foreach (var match in matchesList)
+        foreach (var match in matchesList.ToArray())
         {
-            match.PatchesId = patchesDict[match.Patch!.PatchVersion];
+            if (patchesDict.TryGetValue(match.Patch!.PatchVersion, out var value))
+            {
+                match.PatchesId = value;
+            }
+            else
+            {
+                matchesList = matchesList.Where(m => m.GameId != match.GameId && m.Platform != match.Platform).ToArray();
+            }
+            
             foreach (var participant in match.Participants)
             {
                 participant.SummonersId = distinctSummoners[participant.Summoner!.Puuid]!.Id;
@@ -154,6 +162,7 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
             {
                 options.SetOutputIdentity = true;
                 options.IncludeChildren = true;
+                options.ExcludedChildren = [nameof(Patches)];
             }).ConfigureAwait(false);
         }
         catch (Exception e)

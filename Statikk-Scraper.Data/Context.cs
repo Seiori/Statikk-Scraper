@@ -84,7 +84,7 @@ public class Context(DbContextOptions<Context> options) : DbContext(options)
         modelBuilder.Entity<MatchTeams>(entity =>
         {
             entity.HasKey(mt => new { mt.MatchesId, mt.Team });
-
+            
             entity.Property(mt => mt.Team).HasConversion<ushort>();
         });
 
