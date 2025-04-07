@@ -22,6 +22,8 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
     private static readonly Dictionary<PlatformRoute, RegionalRoute> Regions = new()
     {
         [PlatformRoute.NA1] = RegionalRoute.AMERICAS,
+        [PlatformRoute.EUW1] = RegionalRoute.EUROPE,
+        [PlatformRoute.KR] = RegionalRoute.ASIA,
     };
     private static readonly Tier[] Tiers = [Tier.CHALLENGER, Tier.GRANDMASTER, Tier.MASTER, Tier.DIAMOND, Tier.EMERALD, Tier.PLATINUM, Tier.GOLD, Tier.SILVER, Tier.BRONZE, Tier.IRON];
     private static readonly Division[] Divisions = [Division.I, Division.II, Division.III, Division.IV];
@@ -125,8 +127,6 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
                 }
             );
 
-        var test = summonerRanks.Where(sr => sr.Value.SummonersId == 0);
-
         try
         {
             await context.BulkOperationAsync(BulkOperation.Upsert, summonerRanks.Values, options => {}).ConfigureAwait(false);
@@ -161,8 +161,8 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
             await context.BulkOperationAsync(BulkOperation.Insert, matchesList, options =>
             {
                 options.SetOutputIdentity = true;
-                options.IncludeChildren = true;
-                options.ExcludedChildren = [nameof(Patches)];
+                options.IncludeChildEntities = true;
+                options.ExcludedNavigationPropertyNames = [nameof(Champions), nameof(Patches)];
             }).ConfigureAwait(false);
         }
         catch (Exception e)
@@ -172,7 +172,7 @@ public class DataRoutine(IDbContextFactory<Context> contextFactory, RiotGamesApi
             return;
         }
         
-        Console.WriteLine($"Processed {matchesList.Length} Matches and {summonerRanks.Count} Summoner Ranks for: {platform} - {tier} - {division} - Page {page}");
+        Console.WriteLine($"Processed {matchesList.Length} Matches, {summonerRanks.Count} Summoner Ranks, {distinctSummoners.Count} Summoners for: {platform} - {tier} - {division} - Page {page}");
     }
     
     private async IAsyncEnumerable<(int Page, Dictionary<string, SummonerRanks> SummonerRanks)> GetSummonerRanksAsync(PlatformRoute platform, Tier tier, Division division)
