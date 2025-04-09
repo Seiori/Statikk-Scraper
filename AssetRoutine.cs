@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Pomelo.EntityFrameworkCore.MySql.Query.Internal;
 using Seiori.MySql;
 using Seiori.MySql.Enums;
 using SixLabors.ImageSharp;
@@ -34,10 +35,13 @@ public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory)
         {
             await UpdatePatchVersionsAsync();
             await UpdateChampionsAsync();
-            // await UpdateProfileIconsAsync();
-            // await UpdateSummonerSpellsAsync();
-            // await UpdateRunesAsync();
-            // await UpdateItemsAsync();
+            
+            await Task.WhenAll(
+                UpdateProfileIconsAsync(),
+                UpdateSummonerSpellsAsync(),
+                UpdateRunesAsync(),
+                UpdateItemsAsync()
+            );
         }
         catch (Exception ex)
         {
@@ -49,12 +53,6 @@ public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory)
     {
         await using var stream = await _httpClient.GetStreamAsync(url);
         return await JsonDocument.ParseAsync(stream);
-    }
-    
-    private static void EnsureDirectory(string path)
-    {
-        if (!Directory.Exists(path))
-            Directory.CreateDirectory(path);
     }
     
     private async Task DownloadAndSaveImageAsync(string imageUrl, string filePath, string contextInfo)
@@ -102,11 +100,10 @@ public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory)
             { "E", Path.Combine(_wwwrootPath, "images", "Champions", "E") },
             { "R", Path.Combine(_wwwrootPath, "images", "Champions", "R") }
         };
-        foreach (var dir in iconDirs.Values) EnsureDirectory(dir);
+        foreach (var dir in iconDirs.Values.Where(dir => Directory.Exists(dir) is false)) Directory.CreateDirectory(dir);;
 
         using var doc = await GetJsonDocumentAsync(ChampionJsonUrl);
         var championJson = doc.RootElement.EnumerateObject();
-        var patchMapping = await context.Patches.ToDictionaryAsync(pv => pv.PatchVersion, pv => pv.Id);
         var imageTasks = new List<Task>();
         var championsList = new List<Champions>();
 
@@ -135,15 +132,14 @@ public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory)
             championsList.Add(new Champions { Id = (ushort)champId, Name = champName });
         }
         await Task.WhenAll(imageTasks);
-        if (championsList.Count == 0)
-            throw new Exception("Champion List is Empty");
+        if (championsList.Count == 0) throw new Exception("Champion List is Empty");
         await context.BulkOperationAsync(BulkOperation.Upsert, championsList, options => { });
     }
 
     private async Task UpdateProfileIconsAsync()
     {
         var profileIconsDir = Path.Combine(_wwwrootPath, "images", "ProfileIcons");
-        EnsureDirectory(profileIconsDir);
+        if (Directory.Exists(profileIconsDir) is false) Directory.CreateDirectory(profileIconsDir);
 
         using var doc = await GetJsonDocumentAsync(ProfileIconJsonUrl);
         foreach (var profileIcon in doc.RootElement.EnumerateArray())
@@ -160,7 +156,7 @@ public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory)
     private async Task UpdateSummonerSpellsAsync()
     {
         var spellsDir = Path.Combine(_wwwrootPath, "images", "SummonerSpells");
-        EnsureDirectory(spellsDir);
+        if (Directory.Exists(spellsDir) is false) Directory.CreateDirectory(spellsDir);
     
         using var summonerSpellDoc = await GetJsonDocumentAsync(SummonerSpellJsonUrl);
         foreach (var summonerSpell in summonerSpellDoc.RootElement.EnumerateArray().SkipLast(3))
@@ -177,7 +173,7 @@ public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory)
     private async Task UpdateRunesAsync()
     {
         var runesDir = Path.Combine(_wwwrootPath, "images", "Runes");
-        EnsureDirectory(runesDir);
+        if (Directory.Exists(runesDir) is false) Directory.CreateDirectory(runesDir);
         
         using var runeDoc = await GetJsonDocumentAsync(RuneJsonUrl);
         foreach (var rune in runeDoc.RootElement.EnumerateArray())
@@ -204,14 +200,12 @@ public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory)
     private async Task UpdateItemsAsync()
     {
         var itemsDir = Path.Combine(_wwwrootPath, "images", "Items");
-        EnsureDirectory(itemsDir);
+        if (Directory.Exists(itemsDir) is false) Directory.CreateDirectory(itemsDir);
 
         using var doc = await GetJsonDocumentAsync(ItemJsonUrl);
         foreach (var item in doc.RootElement.EnumerateArray())
         {
             var itemId = item.GetProperty("id").GetInt32();
-            var isBoots = false;
-            foreach (var category in item.GetProperty("categories").EnumerateArray().Where(category => category.GetString() == "Boots")) isBoots = true;
             var iconPath = item.GetProperty("iconPath").GetString() ?? string.Empty;
             var fileName = $"{iconPath.Split('/').Last().ToLower()}";
             var imageUrl = $"{ItemAssetUrl}{fileName}";
