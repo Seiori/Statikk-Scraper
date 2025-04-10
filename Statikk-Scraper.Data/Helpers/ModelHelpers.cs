@@ -13,32 +13,31 @@ public static  class ModelHelpers
     public static Matches ParseRiotMatchData(Match matchData)
     {
         var matchInfo = matchData.Info;
+        var platform = Enum.Parse<PlatformRoute>(matchInfo.PlatformId);
         var versionParts = matchInfo.GameVersion.Split('.');
         var patchVersion = $"{versionParts[0]}.{versionParts[1]}";
+
+        var teamCount = matchInfo.Teams.Length;
+        var teams = new MatchTeams[teamCount];
+        var winningTeam = Team.Other;
         
-        var teamsArr = matchInfo.Teams.ToArray();
-        var winningTeam = teamsArr.FirstOrDefault(t => t.Win)?.TeamId ?? Team.Other;
-        
-        var teams = new MatchTeams[teamsArr.Length];
-        for (var i = 0; i < teamsArr.Length; i++)
+        for (var i = 0; i < teamCount; i++)
         {
-            var t = teamsArr[i];
-            var objectives = t.Objectives;
+            var team = matchInfo.Teams[i];
+            if (team.Win) winningTeam = team.TeamId;
+            
+            var objectives = team.Objectives;
             
             var banChampionIds = new int[5];
+            var bansToProcess = Math.Min(team.Bans.Length, 5);
+            for (var j = 0; j < bansToProcess; j++)
             {
-                var j = 0;
-                foreach (var ban in t.Bans)
-                {
-                    if (j >= 5)
-                        break;
-                    banChampionIds[j++] = (int)ban.ChampionId;
-                }
+                banChampionIds[j] = (ushort)team.Bans[j].ChampionId;
             }
-
+            
             teams[i] = new MatchTeams
             {
-                Team = t.TeamId,
+                Team = team.TeamId,
 
                 Ban1 = (ushort)banChampionIds[0],
                 Ban2 = (ushort)banChampionIds[1],
@@ -56,32 +55,33 @@ public static  class ModelHelpers
             };
         }
         
-        var participantsArr = matchInfo.Participants.ToArray();
-        var participants = new Participants[participantsArr.Length];
-        for (var i = 0; i < participantsArr.Length; i++)
+        var participantCount = matchInfo.Participants.Length;
+        var participants = new Participants[participantCount];
+        
+        for (var i = 0; i < participantCount; i++)
         {
-            var p = participantsArr[i];
-            var perks = p.Perks;
+            var participant = matchInfo.Participants[i];
+            var perks = participant.Perks;
             var primaryStyle = perks.Styles.FirstOrDefault();
             var secondaryStyle = perks.Styles.LastOrDefault();
 
             var summoner = new Summoners
             {
-                Puuid         = p.Puuid,
-                SummonerId    = p.SummonerId,
-                Platform      = Enum.Parse<PlatformRoute>(matchInfo.PlatformId),
-                RiotId        = NormalizeRiotId($"{p.RiotIdGameName}#{p.RiotIdTagline}"),
-                ProfileIconId = (ushort)p.ProfileIcon,
-                SummonerLevel = (ushort)p.SummonerLevel,
+                Puuid         = participant.Puuid,
+                SummonerId    = participant.SummonerId,
+                Platform      = platform,
+                RiotId        = NormalizeRiotId($"{participant.RiotIdGameName}#{participant.RiotIdTagline}"),
+                ProfileIconId = (ushort)participant.ProfileIcon,
+                SummonerLevel = (ushort)participant.SummonerLevel,
                 LastUpdated   = DateTime.UtcNow,
                 Ranks = new List<SummonerRanks>()
             };
 
             participants[i] = new Participants
             {
-                Team         = p.TeamId,
-                ChampionsId  = (ushort)p.ChampionId,
-                Role         = ConvertRole(p.TeamPosition),
+                Team         = participant.TeamId,
+                ChampionsId  = (ushort)participant.ChampionId,
+                Role         = ConvertRole(participant.TeamPosition),
                 
                 PrimaryPageId           = (ushort)(primaryStyle?.Style ?? 0),
                 PrimaryPageKeystoneId   = (ushort)(primaryStyle?.Selections[0].Perk ?? 0),
@@ -94,32 +94,32 @@ public static  class ModelHelpers
                 
                 OffensiveStatId = (ushort)perks.StatPerks.Offense,
                 DefensiveStatId = (ushort)perks.StatPerks.Defense,
-                FlexStatId = (ushort)perks.StatPerks.Flex,
+                FlexStatId      = (ushort)perks.StatPerks.Flex,
                 
-                SummonerSpell1Id = (ushort)p.Summoner1Id,
-                SummonerSpell2Id = (ushort)p.Summoner2Id,
+                SummonerSpell1Id = (ushort)participant.Summoner1Id,
+                SummonerSpell2Id = (ushort)participant.Summoner2Id,
 
-                Kills  = (byte)p.Kills,
-                Deaths = (byte)p.Deaths,
-                Assists= (byte)p.Assists,
-                Kda    = (decimal)(p.Challenges?.Kda ?? 0.0),
+                Kills   = (byte)participant.Kills,
+                Deaths  = (byte)participant.Deaths,
+                Assists = (byte)participant.Assists,
+                Kda     = (decimal)(participant.Challenges?.Kda ?? 0.0),
 
-                KillParticipation = (byte)((p.Challenges?.KillParticipation ?? 0.0) * 100),
-                CreepScore        = (ushort)p.TotalMinionsKilled,
+                KillParticipation = (byte)((participant.Challenges?.KillParticipation ?? 0.0) * 100),
+                CreepScore        = (ushort)participant.TotalMinionsKilled,
 
-                Item1Id = (ushort)p.Item0,
-                Item2Id = (ushort)p.Item1,
-                Item3Id = (ushort)p.Item2,
-                Item4Id = (ushort)p.Item3,
-                Item5Id = (ushort)p.Item4,
-                Item6Id = (ushort)p.Item5,
-                Item7Id = (ushort)p.Item6,
+                Item1Id = (ushort)participant.Item0,
+                Item2Id = (ushort)participant.Item1,
+                Item3Id = (ushort)participant.Item2,
+                Item4Id = (ushort)participant.Item3,
+                Item5Id = (ushort)participant.Item4,
+                Item6Id = (ushort)participant.Item5,
+                Item7Id = (ushort)participant.Item6,
                 
-                LargestMultiKill = (byte)p.LargestMultiKill,
+                LargestMultiKill = (byte)participant.LargestMultiKill,
                 
-                AttackDamageDealt = (uint)p.PhysicalDamageDealtToChampions,
-                MagicDamageDealt = (uint)p.MagicDamageDealtToChampions,
-                TrueDamageDealt = (uint)p.TrueDamageDealtToChampions,
+                AttackDamageDealt = (uint)participant.PhysicalDamageDealtToChampions,
+                MagicDamageDealt = (uint)participant.MagicDamageDealtToChampions,
+                TrueDamageDealt = (uint)participant.TrueDamageDealtToChampions,
 
                 Summoner = summoner
             };
@@ -141,10 +141,9 @@ public static  class ModelHelpers
 
     private static string NormalizeRiotId(string riotId)
     {
-        if (string.IsNullOrWhiteSpace(riotId))
-            return riotId;
+        if (string.IsNullOrWhiteSpace(riotId)) return riotId;
 
-        riotId = riotId.Replace("\r", "").Replace("\n", "").Trim();
+        riotId = riotId.Trim();
         return riotId.Length > 40 ? riotId[..40] : riotId;
     }
 }
