@@ -8,8 +8,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Camille.RiotGames" Version="3.0.0-nightly-2025-03-21-d2b94715b7" />
       <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.3" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\Seiori.RiotAPI\Seiori.RiotAPI.csproj" />
     </ItemGroup>
 
 </Project>

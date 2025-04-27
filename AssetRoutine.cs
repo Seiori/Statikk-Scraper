@@ -1,6 +1,4 @@
 ﻿using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
-using Pomelo.EntityFrameworkCore.MySql.Query.Internal;
 using Seiori.MySql;
 using Seiori.MySql.Enums;
 using SixLabors.ImageSharp;
@@ -83,10 +81,10 @@ public class AssetRoutine(Context context, IHttpClientFactory httpClientFactory)
             .DistinctBy(p => p.PatchVersion)
             .ToArray();
 
-        if (patches.Length == 0)
-            throw new Exception("Patch Versions List is Empty");
+        if (patches.Length == 0) throw new Exception("Patch Versions List is Empty");
 
         patches.Last().IsLatest = true;
+        
         await context.BulkOperationAsync(BulkOperation.Upsert, patches, options => { });
     }
 

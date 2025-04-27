@@ -1,10 +1,12 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Statikk-Scraper", "Statikk-Scraper.csproj", "{C27FFDB2-8AA8-4225-9303-5DE23A207087}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Statikk-Scraper.Data", "Statikk-Scraper.Data\Statikk-Scraper.Data.csproj", "{D0099127-6303-487F-B3A7-E56CC1BF6243}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seiori.MySql", "..\MySql-Bulk-Operations\Seiori.MySql.csproj", "{A8EFC9FA-593B-4BCA-AE7E-CCE34AFED88C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Statikk-Scraper", "Statikk-Scraper.csproj", "{A0F8B09C-E214-45C3-A510-F4F7CAC5C6AA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seiori.RiotAPI", "..\Seiori.RiotAPI\Seiori.RiotAPI.csproj", "{E7C21D78-F90A-4FE5-8BB5-35B02E1BEC32}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -12,10 +14,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{C27FFDB2-8AA8-4225-9303-5DE23A207087}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C27FFDB2-8AA8-4225-9303-5DE23A207087}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C27FFDB2-8AA8-4225-9303-5DE23A207087}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C27FFDB2-8AA8-4225-9303-5DE23A207087}.Release|Any CPU.Build.0 = Release|Any CPU
 		{D0099127-6303-487F-B3A7-E56CC1BF6243}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{D0099127-6303-487F-B3A7-E56CC1BF6243}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D0099127-6303-487F-B3A7-E56CC1BF6243}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -24,5 +22,13 @@ Global
 		{A8EFC9FA-593B-4BCA-AE7E-CCE34AFED88C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A8EFC9FA-593B-4BCA-AE7E-CCE34AFED88C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A8EFC9FA-593B-4BCA-AE7E-CCE34AFED88C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A0F8B09C-E214-45C3-A510-F4F7CAC5C6AA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A0F8B09C-E214-45C3-A510-F4F7CAC5C6AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A0F8B09C-E214-45C3-A510-F4F7CAC5C6AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A0F8B09C-E214-45C3-A510-F4F7CAC5C6AA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E7C21D78-F90A-4FE5-8BB5-35B02E1BEC32}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E7C21D78-F90A-4FE5-8BB5-35B02E1BEC32}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E7C21D78-F90A-4FE5-8BB5-35B02E1BEC32}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E7C21D78-F90A-4FE5-8BB5-35B02E1BEC32}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

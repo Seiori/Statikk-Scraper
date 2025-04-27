@@ -11,7 +11,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Camille.RiotGames" Version="3.0.0-nightly-2025-03-21-d2b94715b7" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0-preview.1.25080.5" />
       <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0-preview.1.25080.5" />
       <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0-preview.3.efcore.9.0.0" />
@@ -26,6 +25,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\MySql-Bulk-Operations\Seiori.MySql.csproj" />
+      <ProjectReference Include="..\Seiori.RiotAPI\Seiori.RiotAPI.csproj" />
     </ItemGroup>
 
 </Project>

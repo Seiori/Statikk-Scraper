@@ -1,6 +1,8 @@
-﻿using Camille.RiotGames;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Seiori.RiotAPI;
+using Seiori.RiotAPI.Classes;
+using Seiori.RiotAPI.Enums;
 using Statikk_Scraper;
 using Statikk_Scraper.Data;
 
@@ -22,14 +24,15 @@ var serviceProvider = new ServiceCollection()
     .AddHttpClient()
     .AddScoped<AssetRoutine>()
     .AddScoped<DataRoutine>()
-    .AddSingleton<RiotGamesApi>(provider =>
+    .AddSingleton<RiotApiClient>(provider =>
     {
-        var riotGamesApiConfig = new RiotGamesApiConfig.Builder(riotApiKey)
+        var httpClient = provider.GetRequiredService<IHttpClientFactory>().CreateClient();
+        var riotApiOptions = new RiotApiOptions
         {
-            MaxConcurrentRequests = 50000
-        }.Build();
-
-        return RiotGamesApi.NewInstance(riotGamesApiConfig);
+            Apikey = riotApiKey,
+            RegionalRoute = RegionalRoute.Europe
+        };
+        return new RiotApiClient(riotApiOptions);
     })
     .BuildServiceProvider();
 
@@ -37,7 +40,7 @@ using var scope = serviceProvider.CreateScope();
 var assetRoutine = scope.ServiceProvider.GetRequiredService<AssetRoutine>();
 var dataRoutine = scope.ServiceProvider.GetRequiredService<DataRoutine>();
 
-await assetRoutine.BeginAssetRoutine(rootPatch);
+//await assetRoutine.BeginAssetRoutine(rootPatch);
 await dataRoutine.BeginDataRoutine();
 
 var endTime = DateTime.Now;

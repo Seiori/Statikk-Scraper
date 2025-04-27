@@ -1,13 +1,18 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using Statikk_Scraper.Data.Models;
 
 namespace Statikk_Scraper.Models;
 
 public class Champions
 {
-    [Key] [DatabaseGenerated(DatabaseGeneratedOption.None)] 
+    /// <summary>
+    /// Fields
+    /// </summary>
     public ushort Id { get; init; }
-    
-    [MaxLength(40)] 
     public required string Name { get; init; }
+
+    /// <summary>
+    /// Children
+    /// </summary>
+    public ICollection<MatchTeamBans> Bans { get; init; } = [];
+    public ICollection<Participants> Participants { get; init; } = [];
 }

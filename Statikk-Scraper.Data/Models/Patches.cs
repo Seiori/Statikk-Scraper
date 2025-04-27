@@ -1,15 +1,17 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-
-namespace Statikk_Scraper.Models;
+﻿namespace Statikk_Scraper.Models;
 
 public class Patches
 {
-    [Key] [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    /// <summary>
+    /// Fields
+    /// </summary>
     public ushort Id { get; init; }
-    
-    [MaxLength(5)] 
     public required string PatchVersion { get; init; }
     
     public bool IsLatest { get; set; }
+
+    /// <summary>
+    /// Children
+    /// </summary>
+    public ICollection<Matches> Matches { get; init; } = [];
 }
