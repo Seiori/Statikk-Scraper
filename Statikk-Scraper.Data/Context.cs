@@ -2,21 +2,17 @@
 using Sta.Data.Models;
 using Statikk_Scraper.Data.Models;
 using Statikk_Scraper.Models;
-using Statikk_Scraper.Statikk_Scraper.Data.Models;
 
 namespace Statikk_Scraper.Data;
 
 public class Context(DbContextOptions<Context> options) : DbContext(options)
 {
+    public DbSet<Audits> Audits { get; set; }
     public DbSet<Champions> Champions { get; set; }
     public DbSet<Matches> Matches { get; set; }
-    public DbSet<MatchTeamBans> MatchTeamBans { get; set; }
-    public DbSet<MatchTeams> MatchTeams { get; set; }
-    public DbSet<ParticipantItems> ParticipantItems { get; set; }
+    public DbSet<Teams> Teams { get; set; }
     public DbSet<Participants> Participants { get; set; }
-    public DbSet<ParticipantSummonerSpells> ParticipantSummonerSpells { get; set; }
     public DbSet<Patches> Patches { get; set; }
-    public DbSet<SummonerRanks> SummonerRanks { get; set; }
     public DbSet<Summoners> Summoners { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -29,6 +25,17 @@ public class Context(DbContextOptions<Context> options) : DbContext(options)
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Audits
+        modelBuilder.Entity<Audits>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+
+            entity.Property(a => a.Id).ValueGeneratedOnAdd();
+
+            entity.Property(a => a.Method).HasMaxLength(255);
+            entity.Property(a => a.Timestamp).ValueGeneratedOnAdd();
+        });
+        
         // Champions
         modelBuilder.Entity<Champions>(entity =>
         {
@@ -54,25 +61,9 @@ public class Context(DbContextOptions<Context> options) : DbContext(options)
                 .WithMany(p => p.Matches)
                 .HasForeignKey(m => m.PatchesId);
         });
-
-        // MatchTeamBans
-        modelBuilder.Entity<MatchTeamBans>(entity =>
-        {
-            entity.HasKey(mtb => new { mtb.MatchTeamsId, mtb.ChampionsId });
-            
-            entity
-                .HasOne(mtb => mtb.MatchTeam)
-                .WithMany(mt => mt.Bans)
-                .HasForeignKey(mtb => mtb.MatchTeamsId);
-            
-            entity
-                .HasOne(mtb => mtb.Champion)
-                .WithMany(c => c.Bans)
-                .HasForeignKey(mtb => mtb.ChampionsId);
-        });
         
         // MatchTeams
-        modelBuilder.Entity<MatchTeams>(entity =>
+        modelBuilder.Entity<Teams>(entity =>
         {
             entity.HasKey(mt => mt.Id);
             entity.HasAlternateKey(mt => new { mt.MatchesId, mt.TeamId });
@@ -85,24 +76,11 @@ public class Context(DbContextOptions<Context> options) : DbContext(options)
                 .HasForeignKey(mt => mt.MatchesId);
         });
         
-        // ParticipantItems
-        modelBuilder.Entity<ParticipantItems>(entity =>
-        {
-            entity.HasKey(pi => new { pi.ParticipantId, pi.ItemId });
-            
-            entity
-                .HasOne(pi => pi.Participant)
-                .WithMany(p => p.Items)
-                .HasForeignKey(pi => pi.ParticipantId);
-        });
-        
         // Participants
         modelBuilder.Entity<Participants>(entity =>
         {
-            entity.HasKey(p => p.Id);
-            entity.HasAlternateKey(p => new { p.SummonersId, p.MatchTeamsId });
+            entity.HasKey(p => new { p.SummonersId, p.TeamsId });
             
-            entity.Property(p => p.Id).ValueGeneratedOnAdd();
             entity.Property(p => p.Role).HasConversion<byte>();
 
             entity
@@ -113,23 +91,12 @@ public class Context(DbContextOptions<Context> options) : DbContext(options)
             entity
                 .HasOne(p => p.Team)
                 .WithMany(mt => mt.Participants)
-                .HasForeignKey(p => p.MatchTeamsId);
+                .HasForeignKey(p => p.TeamsId);
 
             entity
                 .HasOne(p => p.Champion)
                 .WithMany(c => c.Participants)
                 .HasForeignKey(p => p.ChampionsId);
-        });
-        
-        // ParticipantSummonerSpells
-        modelBuilder.Entity<ParticipantSummonerSpells>(entity =>
-        {
-            entity.HasKey(pss => new { pss.ParticipantId, pss.SummonerSpellId });
-            
-            entity
-                .HasOne(pss => pss.Participant)
-                .WithMany(s => s.SummonerSpells)
-                .HasForeignKey(pss => pss.ParticipantId);
         });
         
         // Patches
@@ -142,18 +109,30 @@ public class Context(DbContextOptions<Context> options) : DbContext(options)
             entity.Property(p => p.PatchVersion).HasMaxLength(5);
         });
         
-        // SummonerRanks
+        // Queues
+        modelBuilder.Entity<Queues>(entity =>
+        {
+            entity.HasKey(q => q.QueueId);
+
+            entity.Property(q => q.QueueId).ValueGeneratedNever();
+            entity.Property(q => q.Name).HasMaxLength(255);
+            entity.Property(q => q.ShortName).HasMaxLength(255);
+            entity.Property(q => q.Description).HasMaxLength(255);
+        });
+        
+        // Summoner Ranks
         modelBuilder.Entity<SummonerRanks>(entity =>
         {
-            entity.HasKey(sr => new { sr.SummonersId, sr.Queue });
+            entity.HasKey(s => new { s.SummonersId, s.Season, s.Queue, s.Date });
             
-            entity.Ignore(sr => sr.Puuid);
-            entity.Property(sr => sr.Division).HasConversion<byte>();
+            entity.Property(s => s.Queue).HasConversion<ushort>();
+            entity.Property(s => s.Tier).HasConversion<byte>();
+            entity.Property(s => s.Division).HasConversion<byte>();
             
             entity
-                .HasOne(sr => sr.Summoner)
+                .HasOne(s => s.Summoner)
                 .WithMany(s => s.Ranks)
-                .HasForeignKey(sr => sr.SummonersId);
+                .HasForeignKey(s => s.SummonersId);
         });
         
         // Summoners
@@ -165,10 +144,10 @@ public class Context(DbContextOptions<Context> options) : DbContext(options)
             
             entity.Property(s => s.Id).ValueGeneratedOnAdd();
             entity.Property(s => s.Puuid).HasMaxLength(78);
-            entity.Property(s => s.SummonerId).HasMaxLength(58);
             entity.Property(s => s.Region).HasConversion<byte>();
+            entity.Property(s => s.SummonerId).HasMaxLength(58);
             entity.Property(s => s.RiotId).HasMaxLength(40);
-            entity.Property(s => s.LastUpdated).ValueGeneratedOnAdd();
+            entity.Property(s => s.LastUpdated).ValueGeneratedOnAddOrUpdate();
         });
         
         base.OnModelCreating(modelBuilder);

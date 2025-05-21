@@ -9,9 +9,9 @@ public class SummonerRanks
     /// Fields
     /// </summary>
     public ulong SummonersId { get; set; }
-    
-    public string Puuid { get; init; } = string.Empty;
-    public ushort Queue { get; init; }
+    public byte Season { get; set; }
+    public Queue Queue { get; init; }
+    public DateOnly Date { get; init; }
     public Tier Tier { get; init; }
     public Division Division { get; init; }
     public ushort LeaguePoints { get; init; }

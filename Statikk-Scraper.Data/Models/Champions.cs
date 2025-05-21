@@ -13,6 +13,5 @@ public class Champions
     /// <summary>
     /// Children
     /// </summary>
-    public ICollection<MatchTeamBans> Bans { get; init; } = [];
     public ICollection<Participants> Participants { get; init; } = [];
 }

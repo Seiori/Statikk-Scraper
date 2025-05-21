@@ -1,8 +1,6 @@
-﻿using Statikk_Scraper.Data.Models;
+﻿namespace Statikk_Scraper.Models;
 
-namespace Statikk_Scraper.Models;
-
-public class MatchTeams
+public class Teams
 {
     /// <summary>
     /// Fields
@@ -10,6 +8,11 @@ public class MatchTeams
     public ulong Id { get; init; }
     public ulong MatchesId { get; init; }
     public ushort TeamId { get; init; }
+    public ushort Ban1 { get; init; }
+    public ushort Ban2 { get; init; }
+    public ushort Ban3 { get; init; }
+    public ushort Ban4 { get; init; }
+    public ushort Ban5 { get; init; }
     public ushort EpicMonsterKill { get; init; }
     public ushort FirstBlood { get; init; }
     public ushort FirstTurret { get; init; }
@@ -30,6 +33,5 @@ public class MatchTeams
     /// <summary>
     /// Children
     /// </summary>
-    public ICollection<MatchTeamBans> Bans { get; init; } = [];
     public ICollection<Participants> Participants { get; init; } = [];
 }

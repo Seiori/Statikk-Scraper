@@ -1,7 +1,5 @@
 ﻿using Sta.Data.Models;
-using Statikk_Scraper.Data.Models;
 using Statikk_Scraper.Models.Enums;
-using Statikk_Scraper.Statikk_Scraper.Data.Models;
 
 namespace Statikk_Scraper.Models
 {
@@ -10,9 +8,8 @@ namespace Statikk_Scraper.Models
         /// <summary>
         /// Fields
         /// </summary>
-        public ulong Id { get; init; }
         public ulong SummonersId { get; set; }
-        public ulong MatchTeamsId { get; init; }
+        public ulong TeamsId { get; init; }
         public Role Role { get; init; }
         public ushort ChampionsId { get; init; }
         public byte ChampionLevel { get; init; }
@@ -27,6 +24,15 @@ namespace Statikk_Scraper.Models
         public ushort OffensiveStatId { get; init; }
         public ushort DefensiveStatId { get; init; }
         public ushort FlexStatId { get; init; }
+        public ushort SummonerSpell1Id { get; init; }
+        public ushort SummonerSpell2Id { get; init; }
+        public ushort Item1Id { get; init; }
+        public ushort Item2Id { get; init; }
+        public ushort Item3Id { get; init; }
+        public ushort Item4Id { get; init; }
+        public ushort Item5Id { get; init; }
+        public ushort Item6Id { get; init; }
+        public ushort Item7Id { get; init; }
         public ushort TotalQCasts { get; init; }
         public ushort TotalWCasts { get; init; }
         public ushort TotalECasts { get; init; }
@@ -34,12 +40,6 @@ namespace Statikk_Scraper.Models
         public byte Kills { get; init; }
         public byte Deaths { get; init; }
         public byte Assists { get; init; }
-        public ushort TotalMinionsKilled { get; init; }
-        public bool FirstBloodKill { get; init; }
-        public bool FirstBloodAssist { get; init; }
-        public bool FirstTowerKill { get; init; }
-        public bool FirstTowerAssist { get; init; }
-        public ushort LargestCriticalStrike { get; init; }
         public decimal Kda { get; init; }
         public decimal KillParticipation { get; init; }
         public byte DoubleKills { get; init; }
@@ -47,6 +47,12 @@ namespace Statikk_Scraper.Models
         public byte QuadraKills { get; init; }
         public byte PentaKills { get; init; }
         public byte LargestMultiKill { get; init; }
+        public ushort TotalMinionsKilled { get; init; }
+        public bool FirstBloodKill { get; init; }
+        public bool FirstBloodAssist { get; init; }
+        public bool FirstTowerKill { get; init; }
+        public bool FirstTowerAssist { get; init; }
+        public ushort LargestCriticalStrike { get; init; }
         public ushort AllInPings { get; init; }
         public ushort AssistMePings { get; init; }
         public ushort BasicPings { get; init; }
@@ -87,14 +93,8 @@ namespace Statikk_Scraper.Models
         /// <summary>
         /// Foreign Keys
         /// </summary>
-        public Summoners? Summoner { get; init; }
-        public MatchTeams? Team { get; init; }
+        public required Summoners Summoner { get; init; }
+        public Teams? Team { get; init; }
         public Champions? Champion { get; init; }
-
-        /// <summary>
-        /// Children
-        /// </summary>
-        public ICollection<ParticipantSummonerSpells> SummonerSpells { get; init; } = [];
-        public ICollection<ParticipantItems> Items { get; init; } = [];
     }
 }

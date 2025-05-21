@@ -6,9 +6,8 @@ public class Patches
     /// Fields
     /// </summary>
     public ushort Id { get; init; }
+    public byte Season { get; init; }
     public required string PatchVersion { get; init; }
-    
-    public bool IsLatest { get; set; }
 
     /// <summary>
     /// Children

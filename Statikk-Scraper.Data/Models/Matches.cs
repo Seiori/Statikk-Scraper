@@ -12,14 +12,12 @@ namespace Statikk_Scraper.Models
         public ulong GameId { get; init; }  
         public ushort PatchesId { get; init; }
         public ushort Queue { get; init; }
-        public Tier Tier { get; init; }
-        public Division Division { get; init; }
-        public ushort LeaguePoints { get; init; }
-        public ushort WinningTeam { get; init; }
-        public ushort GameEndedInEarlySurrender { get; init; }
-        public ushort GameEndedInSurrender { get; init; }
+        public Tier Tier { get; set; }
+        public Division Division { get; set; }
+        public ushort LeaguePoints { get; set; }
         public DateTime DatePlayed { get; init; }
         public TimeSpan TimePlayed { get; init; }
+        public string EndOfGameResult { get; init; }
         
         /// <summary>
         /// Foreign Keys
@@ -29,6 +27,6 @@ namespace Statikk_Scraper.Models
         /// <summary>
         /// Children
         /// </summary>
-        public ICollection<MatchTeams> Teams { get; init; } = [];
+        public ICollection<Teams> Teams { get; init; } = [];
     }
 }

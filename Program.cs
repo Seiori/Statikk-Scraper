@@ -22,8 +22,9 @@ if (!Directory.Exists(championsDirectory)) Directory.CreateDirectory(championsDi
 var serviceProvider = new ServiceCollection()
     .AddDbContextFactory<Context>(options => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)))
     .AddHttpClient()
-    .AddScoped<AssetRoutine>()
     .AddScoped<DataRoutine>()
+    .AddScoped<AssetRoutine>()
+    .AddScoped<ImportRoutine>()
     .AddSingleton<RiotApiClient>(provider =>
     {
         var httpClient = provider.GetRequiredService<IHttpClientFactory>().CreateClient();
@@ -37,11 +38,13 @@ var serviceProvider = new ServiceCollection()
     .BuildServiceProvider();
 
 using var scope = serviceProvider.CreateScope();
-var assetRoutine = scope.ServiceProvider.GetRequiredService<AssetRoutine>();
 var dataRoutine = scope.ServiceProvider.GetRequiredService<DataRoutine>();
+var assetRoutine = scope.ServiceProvider.GetRequiredService<AssetRoutine>();
+var importRoutine = scope.ServiceProvider.GetRequiredService<ImportRoutine>();
 
-//await assetRoutine.BeginAssetRoutine(rootPatch);
 await dataRoutine.BeginDataRoutine();
+//await assetRoutine.BeginAssetRoutine(rootPatch);
+//await importRoutine.BeginImportRoutine();
 
 var endTime = DateTime.Now;
 Console.WriteLine($"Import Finished at: {endTime}");

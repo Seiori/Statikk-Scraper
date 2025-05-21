@@ -11,8 +11,8 @@ public class Summoners
     /// </summary>
     public ulong Id { get; init; } 
     public required string Puuid { get; init; }
-    public required string SummonerId { get; init; }
     public Region Region { get; init; }
+    public required string SummonerId { get; init; }
     public required string RiotId { get; init; }
     public ushort ProfileIconId { get; init; }
     public ushort SummonerLevel { get; init; }
@@ -21,7 +21,6 @@ public class Summoners
     /// <summary>
     /// Children
     /// </summary>
-    public ICollection<Participants> Participants { get; init; } = [];
-
     public ICollection<SummonerRanks> Ranks { get; init; } = [];
+    public ICollection<Participants> Participants { get; init; } = [];
 }
